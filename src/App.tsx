@@ -6,7 +6,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import DashboardLayout from './components/layout/DashboardLayout';
-import { StockPage, AssetsPage, ScannerPage, SettingsPage, LoginPage } from './pages';
+import { StockPage, AssetsPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage } from './pages';
 import { useAuth } from './hooks/useAuth';
 
 export default function App() {
@@ -27,6 +27,8 @@ export default function App() {
           <Route index element={<Navigate to="/stock" replace />} />
           <Route path="stock" element={<StockPage />} />
           <Route path="assets" element={<AssetsPage />} />
+          <Route path="assets/:id" element={<AssetDetailsPage />} />
+          <Route path="customers/:code" element={<CustomerDetailsPage />} />
           <Route path="scanner" element={<ScannerPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
