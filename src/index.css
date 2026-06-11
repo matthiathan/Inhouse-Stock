@@ -8,3 +8,11 @@
   --color-text-primary: #111827;
   --color-text-secondary: #6B7280;
 }
+
+.dark {
+  --color-brand-border: #374151;
+  --color-bg-base: #111827;
+  --color-bg-elevated: #1F2937;
+  --color-text-primary: #F9FAFB;
+  --color-text-secondary: #9CA3AF;
+}
