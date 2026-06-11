@@ -48,7 +48,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-bg-elevated border-r border-brand-border flex flex-col">
+    <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-bg-elevated border-r border-brand-border flex-col z-40">
       {/* Header */}
       <div className="p-6 border-b border-brand-border">
         <div className="flex items-center gap-3">
