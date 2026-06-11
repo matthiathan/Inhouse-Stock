@@ -10,15 +10,13 @@ import { StockPage, AssetsPage, ScannerPage, SettingsPage, LoginPage, AssetDetai
 import { useAuth } from './hooks/useAuth';
 
 export default function App() {
-  const { user, loading } = useAuth();
-
-  if (loading) return <div>Loading...</div>;
+  const { user } = useAuth();
 
   return (
     <BrowserRouter>
       <Toaster position="top-right" richColors />
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
         
         <Route 
           path="/*" 

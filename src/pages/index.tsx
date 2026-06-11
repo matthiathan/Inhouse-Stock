@@ -4,6 +4,7 @@ import { Asset, Customer, Section } from '../types';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { toast } from 'sonner';
 import { getAssetByQR, getSections, updateAssetSection } from '../api/assetApi';
+import { useAuth } from '../hooks/useAuth';
 
 export function StockPage() {
   return (
@@ -238,5 +239,39 @@ export function SettingsPage() {
     </div>
   );
 }
-export function LoginPage() { return <div className="flex items-center justify-center p-10 font-bold text-2xl">Login Page</div> }
+export function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { error } = await login(email, password);
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Logged in successfully!');
+      navigate('/');
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center h-screen bg-bg-base p-4">
+      <form onSubmit={handleLogin} className="bg-bg-elevated p-8 rounded-xl border border-brand-border w-full max-w-sm">
+        <h1 className="text-2xl font-bold mb-6 text-text-primary">Sign In</h1>
+        <div className="space-y-4">
+          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-2 border border-brand-border rounded-lg" required />
+          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 border border-brand-border rounded-lg" required />
+          <button type="submit" disabled={loading} className="w-full bg-brand-gold text-white p-2 rounded-lg hover:bg-brand-gold/90 transition-colors">
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
 

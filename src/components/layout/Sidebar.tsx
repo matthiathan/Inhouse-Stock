@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   Package, 
   Database, 
@@ -8,11 +8,15 @@ import {
   Sun,
   Moon,
   LogOut,
-  User
+  User as UserIcon
 } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '../../hooks/useAuth';
+import { toast } from 'sonner';
 
 export default function Sidebar() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const navItems = [
     { name: 'Stock', path: '/stock', icon: Package },
     { name: 'Assets', path: '/assets', icon: Database },
@@ -21,6 +25,12 @@ export default function Sidebar() {
   ];
 
   const [isDark, setIsDark] = useState(false);
+
+  const handleLogout = async () => {
+    await logout();
+    toast.success('Logged out successfully');
+    navigate('/login');
+  };
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-bg-elevated border-r border-brand-border flex flex-col">
@@ -59,10 +69,10 @@ export default function Sidebar() {
       <div className="p-4 border-t border-brand-border space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-brand-gold/10 flex items-center justify-center text-brand-gold">
-            <User size={20} />
+            <UserIcon size={20} />
           </div>
-          <div>
-            <p className="text-sm font-medium text-text-primary">John Doe</p>
+          <div className="overflow-hidden">
+            <p className="text-sm font-medium text-text-primary truncate">{user?.email || 'User'}</p>
             <p className="text-xs text-text-secondary">Standard User</p>
           </div>
         </div>
@@ -74,7 +84,7 @@ export default function Sidebar() {
           >
             {isDark ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 text-text-secondary hover:text-red-600 transition-colors text-sm">
+          <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 text-text-secondary hover:text-red-600 transition-colors text-sm">
             <LogOut size={16} />
             Log Out
           </button>
