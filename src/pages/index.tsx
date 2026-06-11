@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Asset, Customer } from '../types';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Asset, Customer, Section } from '../types';
+import { Html5QrcodeScanner } from 'html5-qrcode';
+import { toast } from 'sonner';
+import { getAssetByQR, getSections, updateAssetSection } from '../api/assetApi';
 
 export function StockPage() {
   return (
@@ -69,37 +72,91 @@ export function AssetsPage() {
 }
 
 export function AssetDetailsPage() {
-  const { id } = useParams<{ id: string }>();
-  const [asset, setAsset] = useState<Asset | null>(null);
-  const [loading, setLoading] = useState(true);
+    const { id } = useParams<{ id: string }>();
+    const [asset, setAsset] = useState<Asset | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [sections, setSections] = useState<Section[]>([]);
+    const [selectedSection, setSelectedSection] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [searchParams] = useSearchParams();
 
-  useEffect(() => {
-      fetch(`/api/assets/${id}`)
-      .then(res => res.json())
-      .then(data => { setAsset(data); setLoading(false); });
-  }, [id]);
+    useEffect(() => {
+        fetch(`/api/assets/${id}`)
+        .then(res => res.json())
+        .then(data => {
+            setAsset(data);
+            setLoading(false);
+            if (searchParams.get('action') === 'update_location') {
+                setIsModalOpen(true);
+            }
+        });
+    }, [id, searchParams]);
 
-  if (loading) return <div className="p-8">Loading asset details...</div>;
-  if (!asset) return <div className="p-8">Asset not found</div>;
+    useEffect(() => {
+        if (isModalOpen && sections.length === 0) {
+            getSections().then(data => {
+                setSections(data);
+                if (asset && asset['Current Location']) {
+                    setSelectedSection(asset['Current Location']);
+                }
+            });
+        }
+    }, [isModalOpen, sections.length, asset]);
 
-  return (
-      <div className="p-8 max-w-4xl">
-          <h1 className="text-3xl font-bold mb-6 text-text-primary">{asset['Asset Name']}</h1>
-          <div className="grid grid-cols-2 gap-6">
-              <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border">
-                  <h3 className="font-bold text-text-primary mb-3">Identifiers</h3>
-                  <p className="text-text-secondary text-sm mb-1">S/N: <span className="text-text-primary">{asset['Serial#']}</span></p>
-                  <p className="text-text-secondary text-sm">QR Code: <span className="text-text-primary">{asset['QR Code']}</span></p>
-              </div>
-              <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border">
-                  <h3 className="font-bold text-text-primary mb-3">Location & Customer</h3>
-                  <p className="text-text-secondary text-sm mb-1">Location: <span className="text-text-primary">{asset['Current Location']}</span></p>
-                  <p className="text-text-secondary text-sm mb-3">Customer: <span className="text-text-primary">{asset['Current Customer Name']}</span></p>
-                  <Link to={`/customers/${asset['C.Code']}`} className="text-brand-gold text-sm font-medium hover:underline">View Customer Details</Link>
-              </div>
-          </div>
-      </div>
-  );
+    const handleSave = async () => {
+        if (!asset || !selectedSection) return;
+        setSaving(true);
+        await updateAssetSection(asset.id, selectedSection);
+        setAsset(prev => prev ? { ...prev, 'Current Location': selectedSection } : null);
+        setSaving(false);
+        setIsModalOpen(false);
+        toast.success("Location updated successfully");
+    };
+
+    if (loading) return <div className="p-8">Loading asset details...</div>;
+    if (!asset) return <div className="p-8">Asset not found</div>;
+
+    return (
+        <div className="p-8 max-w-4xl relative">
+            <h1 className="text-3xl font-bold mb-6 text-text-primary">{asset['Asset Name']}</h1>
+            <div className="grid grid-cols-2 gap-6">
+                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border">
+                    <h3 className="font-bold text-text-primary mb-3">Identifiers</h3>
+                    <p className="text-text-secondary text-sm mb-1">S/N: <span className="text-text-primary">{asset['Serial#']}</span></p>
+                    <p className="text-text-secondary text-sm">QR Code: <span className="text-text-primary">{asset['QR Code']}</span></p>
+                </div>
+                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border">
+                    <h3 className="font-bold text-text-primary mb-3">Location & Customer</h3>
+                    <p className="text-text-secondary text-sm mb-1">Location: <span className="text-text-primary">{asset['Current Location']}</span></p>
+                    <button onClick={() => setIsModalOpen(true)} className="text-brand-gold text-sm font-medium hover:underline mb-3">Change Section</button>
+                    <p className="text-text-secondary text-sm mb-3">Customer: <span className="text-text-primary">{asset['Current Customer Name']}</span></p>
+                    <Link to={`/customers/${asset['C.Code']}`} className="text-brand-gold text-sm font-medium hover:underline">View Customer Details</Link>
+                </div>
+            </div>
+
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+                    <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm">
+                        <h2 className="text-lg font-bold mb-4">Update Asset Location</h2>
+                        <select 
+                            value={selectedSection} 
+                            onChange={(e) => setSelectedSection(e.target.value)}
+                            className="w-full p-2 border border-brand-border rounded-lg mb-4"
+                        >
+                            {sections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
+                        </select>
+                        <div className="flex justify-end gap-2">
+                            <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-text-secondary hover:bg-bg-base rounded-lg">Cancel</button>
+                            <button onClick={handleSave} disabled={saving} className="bg-brand-gold text-white px-4 py-2 rounded-lg font-medium hover:bg-brand-gold/90 transition-colors">
+                                {saving ? 'Saving...' : 'Save Changes'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }
 
 export function CustomerDetailsPage() {
@@ -130,15 +187,40 @@ export function CustomerDetailsPage() {
 }
 
 export function ScannerPage() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const scanner = new Html5QrcodeScanner('reader', { fps: 10, qrbox: 250 }, false);
+    
+    scanner.render(async (decodedText) => {
+      scanner.clear();
+      toast.loading("Locating asset...");
+      
+      try {
+        const asset = await getAssetByQR(decodedText);
+        if (asset && asset.id) {
+          toast.success("Asset found!");
+          navigate(`/assets/${asset.id}?action=update_location`);
+        } else {
+          toast.error("Asset not found in database");
+          // Re-render scanner
+          window.location.reload(); 
+        }
+      } catch (err) {
+        toast.error("Error locating asset");
+        window.location.reload();
+      }
+    }, (err) => {
+      console.warn(err);
+    });
+
+    return () => { scanner.clear(); };
+  }, [navigate]);
+
   return (
-    <div className="flex items-center justify-center h-full min-h-[500px] p-8">
-      <div className="bg-bg-elevated p-12 rounded-xl border border-brand-border text-center w-full max-w-md shadow-sm">
-        <h2 className="text-xl font-bold text-text-primary mb-2">Camera Integration</h2>
-        <p className="text-text-secondary mb-8">Ready to scan codes.</p>
-        <button className="bg-brand-gold text-white px-6 py-3 rounded-lg font-medium hover:bg-brand-gold/90 transition-colors w-full">
-          Tap to Scan QR Code
-        </button>
-      </div>
+    <div className="p-8">
+      <h1 className="text-2xl font-bold text-text-primary mb-6">Scanner</h1>
+      <div id="reader" className="max-w-md mx-auto"></div>
     </div>
   );
 }
@@ -157,3 +239,4 @@ export function SettingsPage() {
   );
 }
 export function LoginPage() { return <div className="flex items-center justify-center p-10 font-bold text-2xl">Login Page</div> }
+

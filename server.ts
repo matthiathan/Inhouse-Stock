@@ -27,6 +27,24 @@ async function startServer() {
     res.json(data);
   });
 
+  app.get("/api/assets/qr/:qr", async (req, res) => {
+    const { data, error } = await supabase.from('fam').select('*').eq('QR Code', req.params.qr).single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  });
+
+  app.get("/api/sections", async (req, res) => {
+    const { data, error } = await supabase.from('section').select('*');
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  });
+
+  app.patch("/api/assets/:id/location", async (req, res) => {
+    const { data, error } = await supabase.from('fam').update({ "Current Location": req.body.newSectionName }).eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+  });
+
   app.get("/api/customers/:code", async (req, res) => {
     const { code } = req.params;
     const tables = ['kzn_customers', 'jhb_customers', 'cpt_customers'];

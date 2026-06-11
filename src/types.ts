@@ -18,3 +18,8 @@ export interface Customer {
   'Ship To': string;
   [key: string]: any;
 }
+
+export interface Section {
+  id: string;
+  section_name: string;
+}

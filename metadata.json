@@ -1,6 +1,6 @@
 {
   "name": "Dallmayr SA Corporate Portal",
   "description": "A corporate portal for Dallmayr SA, featuring inventory, asset management, scanning, and settings.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
