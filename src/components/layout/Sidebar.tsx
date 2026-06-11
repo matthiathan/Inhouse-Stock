@@ -1,0 +1,85 @@
+import { NavLink } from 'react-router-dom';
+import { 
+  Package, 
+  Database, 
+  QrCode, 
+  Settings, 
+  ShieldCheck,
+  Sun,
+  Moon,
+  LogOut,
+  User
+} from 'lucide-react';
+import { useState } from 'react';
+
+export default function Sidebar() {
+  const navItems = [
+    { name: 'Stock', path: '/stock', icon: Package },
+    { name: 'Assets', path: '/assets', icon: Database },
+    { name: 'Scanner', path: '/scanner', icon: QrCode },
+    { name: 'Settings', path: '/settings', icon: Settings },
+  ];
+
+  const [isDark, setIsDark] = useState(false);
+
+  return (
+    <aside className="fixed left-0 top-0 h-screen w-64 bg-bg-elevated border-r border-brand-border flex flex-col">
+      {/* Header */}
+      <div className="p-6 border-b border-brand-border">
+        <div className="flex items-center gap-3">
+          <ShieldCheck className="text-brand-gold" size={32} />
+          <div>
+            <h1 className="font-bold text-lg text-text-primary leading-tight">Dallmayr SA</h1>
+            <p className="text-xs text-text-secondary">Corporate Portal</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                isActive
+                  ? 'bg-brand-gold text-white shadow-[0_4px_12px_rgba(197,160,89,0.3)] font-medium'
+                  : 'text-text-secondary hover:bg-bg-base hover:text-text-primary'
+              }`
+            }
+          >
+            <item.icon size={20} />
+            {item.name}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Footer */}
+      <div className="p-4 border-t border-brand-border space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-brand-gold/10 flex items-center justify-center text-brand-gold">
+            <User size={20} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-text-primary">John Doe</p>
+            <p className="text-xs text-text-secondary">Standard User</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <button 
+            onClick={() => setIsDark(!isDark)}
+            className="p-2 rounded-lg hover:bg-bg-base text-text-secondary transition-colors"
+          >
+            {isDark ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          <button className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-red-50 text-text-secondary hover:text-red-600 transition-colors text-sm">
+            <LogOut size={16} />
+            Log Out
+          </button>
+        </div>
+      </div>
+    </aside>
+  );
+}
