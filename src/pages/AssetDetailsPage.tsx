@@ -332,6 +332,7 @@ export function AssetDetailsPage() {
                                         toast.error("Verification Failed: Scanned QR does not match this asset");
                                     }
                                 }, (err) => {
+                                    if (typeof err === 'string' && (err.includes("NotFoundException") || err.includes("No MultiFormat Readers"))) return;
                                     console.error(err);
                                     if (err?.name === 'NotAllowedError') {
                                         toast.error("Camera permission denied. Please allow camera access in your browser settings.");

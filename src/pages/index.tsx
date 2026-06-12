@@ -28,7 +28,6 @@ export function StockPage() {
   const [formItem, setFormItem] = useState('');
   const [formBarcode, setFormBarcode] = useState('');
   const [formPalletQty, setFormPalletQty] = useState('');
-  const [formBoxesPerPallet, setFormBoxesPerPallet] = useState('48');
   const [formBoxes, setFormBoxes] = useState('');
   const [formUnitsPerBox, setFormUnitsPerBox] = useState('');
   const [formNotes, setFormNotes] = useState('');
@@ -41,7 +40,6 @@ export function StockPage() {
     setFormItem('');
     setFormBarcode('');
     setFormPalletQty('');
-    setFormBoxesPerPallet('48');
     setFormBoxes('');
     setFormUnitsPerBox('');
     setFormNotes('');
@@ -53,23 +51,21 @@ export function StockPage() {
       setFormBarcode(barcodeParam);
       // Try to find a matching item in the loaded stockItems
       const matched = stockItems.find(item => {
-        const itemBarcode = item.barcode || item.Barcode;
-        const itemSku = item.sku || item.SKU;
+        const itemBarcode = item.barcode;
+        const itemSku = item.sku;
         return (itemBarcode && String(itemBarcode) === barcodeParam) || (itemSku && String(itemSku) === barcodeParam);
       });
 
       if (matched) {
-        setFormItem(matched.item_name || matched.item || matched['Item Name'] || matched['item'] || '');
-        setFormUnitsPerBox(String(matched.units_per_box !== undefined && matched.units_per_box !== null ? matched.units_per_box : '12'));
-        setFormPalletQty(String(matched.pallet_quantity !== undefined && matched.pallet_quantity !== null ? matched.pallet_quantity : '0'));
-        setFormBoxesPerPallet(String(matched.boxes_per_pallet !== undefined && matched.boxes_per_pallet !== null ? matched.boxes_per_pallet : '48'));
-        setFormBoxes(String(matched.box_quantity !== undefined && matched.box_quantity !== null ? matched.box_quantity : '0'));
-        setFormNotes(matched.notes || matched.Notes || '');
+        setFormItem(matched.item_name || '');
+        setFormUnitsPerBox(String(matched.units_per_box ?? '12'));
+        setFormPalletQty(String(matched.pallet_quantity ?? '0'));
+        setFormBoxes(String(matched.box_quantity ?? '0'));
+        setFormNotes(matched.notes || '');
       } else {
         // Safe defaults for brand new item
         setFormItem('');
         setFormPalletQty('0');
-        setFormBoxesPerPallet('48');
         setFormBoxes('0');
         setFormUnitsPerBox('12');
         setFormNotes('');
@@ -151,10 +147,9 @@ export function StockPage() {
 
     setSaving(true);
     const palletQty = parseInt(formPalletQty, 10);
-    const boxesPerPallet = parseInt(formBoxesPerPallet || '48', 10);
     const boxQty = parseInt(formBoxes, 10);
     const unitsPerBox = parseInt(formUnitsPerBox, 10);
-    const calculatedTotalUnits = (palletQty * boxesPerPallet * unitsPerBox) + (boxQty * unitsPerBox);
+    const calculatedTotalUnits = (palletQty * 48 * unitsPerBox) + (boxQty * unitsPerBox);
     const generatedSku = `SKU-${Math.floor(10000 + Math.random() * 90000)}`;
 
     if (detectedTable !== 'local') {
@@ -223,6 +218,17 @@ export function StockPage() {
     const palletsToDispatch = Number(dispatchPallets || 0);
     const boxesToDispatch = Number(dispatchBoxes || 0);
     const unitsToDispatch = Number(dispatchUnits || 0);
+
+    const unitsPerBox = dispatchItem.units_per_box || 1;
+    const boxesPerPallet = 48;
+    const totalDeduction = (palletsToDispatch * boxesPerPallet * unitsPerBox) + 
+                           (boxesToDispatch * unitsPerBox) + 
+                           unitsToDispatch;
+
+    if (totalDeduction > (dispatchItem.quantity || 0)) {
+        toast.error("Requested deduction exceeds available stock.");
+        return;
+    }
 
     setDispatching(true);
     try {
@@ -535,20 +541,7 @@ export function StockPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1">Boxes/Pallet *</label>
-                  <input 
-                    type="number" 
-                    required
-                    min="1"
-                    placeholder="48"
-                    value={formBoxesPerPallet} 
-                    onChange={(e) => setFormBoxesPerPallet(e.target.value)}
-                    className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
-                  />
-                </div>
-
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Boxes (Loose) *</label>
                   <input 
@@ -582,10 +575,9 @@ export function StockPage() {
                   <span className="text-sm font-bold text-brand-gold">
                     {(() => {
                       const pQty = Number(formPalletQty || 0);
-                      const bPerPallet = Number(formBoxesPerPallet || 48);
                       const bQty = Number(formBoxes || 0);
                       const uBox = Number(formUnitsPerBox || 0);
-                      return (pQty * bPerPallet * uBox) + (bQty * uBox);
+                      return (pQty * 48 * uBox) + (bQty * uBox);
                     })()} units
                   </span>
                 </div>

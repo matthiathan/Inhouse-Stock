@@ -20,19 +20,28 @@ export function OrdersPage() {
   const [lineItems, setLineItems] = useState<{stockId: string, barcode: string, itemName: string, requiredQty: number, maxAvailable: number, warning?: string}[]>([]);
 
   // Fulfillment scanner
+  const [isProcessing, setIsProcessing] = useState(false);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isFetchingStock, setIsFetchingStock] = useState(false);
 
   useEffect(() => {
     fetchOrders();
   }, []);
 
   const openCreateModal = async () => {
+    setIsFetchingStock(true);
     const nextNum = await getNextOrderNumber();
     const stock = await getAvailableStock();
+    if (!stock || stock.length === 0) {
+        toast.error("No stock data available to create order");
+        setIsFetchingStock(false);
+        return;
+    }
     setNewOrderNum(nextNum);
     setAvailableStockData(stock);
+    setIsFetchingStock(false);
     setIsCreateModalOpen(true);
   }
 
@@ -50,14 +59,14 @@ export function OrdersPage() {
   };
 
   const updateLineItem = (index: number, stockId: string) => {
-    const stockItem = availableStockData.find(i => i.id === stockId);
+    const stockItem = availableStockData.find(i => String(i.id) === String(stockId));
     if (stockItem) {
         const newLineItems = [...lineItems];
         newLineItems[index] = {
             stockId: stockItem.id,
             barcode: stockItem.barcode,
             itemName: stockItem.item_name || 'Unknown Item',
-            requiredQty: stockItem.total_available_units > 0 ? 1 : 0,
+            requiredQty: 1, // Default to 1
             maxAvailable: stockItem.total_available_units
         };
         setLineItems(newLineItems);
@@ -69,12 +78,11 @@ export function OrdersPage() {
     const max = newLineItems[index].maxAvailable;
     
     if (qty > max) {
-        newLineItems[index].warning = `Not enough stock. Only ${max} available.`;
-        newLineItems[index].requiredQty = max;
-    } else {
-        newLineItems[index].warning = undefined;
-        newLineItems[index].requiredQty = qty;
+        toast.error("Not enough stock");
+        qty = max;
     }
+    
+    newLineItems[index].requiredQty = qty;
     
     setLineItems(newLineItems);
   }
@@ -122,12 +130,14 @@ export function OrdersPage() {
   };
 
   const fulfillItem = async (barcode: string) => {
-    if (!activeOrder) return;
+    if (!activeOrder || isProcessing) return;
     
+    setIsProcessing(true);
     const item = orderItems.find(i => i.order_id === activeOrder.id && i.stock_barcode === barcode && !i.is_fulfilled);
     
     if (!item) {
         toast.error("Scanned item not found in order or already fulfilled");
+        setIsProcessing(false);
         return;
     }
 
@@ -141,10 +151,13 @@ export function OrdersPage() {
 
     toast.success("Item scanned");
     fetchOrders();
+    setIsProcessing(false);
   };
 
   const completeOrder = async () => {
     if (!activeOrder) return;
+    
+    if (!window.confirm("Are you sure you want to complete this order?")) return;
     
     // Update order
     await supabase.from('orders').update({
@@ -174,7 +187,10 @@ export function OrdersPage() {
           <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-bold text-text-primary">Active Orders</h2>
               {['admin', 'ops_manager'].includes(role || '') && (
-                  <button onClick={openCreateModal} className="bg-brand-gold text-white px-4 py-2 rounded">Create Order</button>
+                  <button onClick={openCreateModal} className="bg-brand-gold text-white px-4 py-2 rounded flex items-center gap-2">
+                {isFetchingStock && <Loader2 className="animate-spin" size={16} />}
+                Create Order
+              </button>
               )}
           </div>
         </section>
@@ -196,11 +212,10 @@ export function OrdersPage() {
                               type="number" 
                               min="1"
                               max={item.maxAvailable > 0 ? item.maxAvailable : 1}
-                              disabled={item.maxAvailable === 0}
                               value={item.requiredQty}
-                              className={`p-2 border border-brand-border rounded bg-bg-base w-24 ${item.maxAvailable === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                              className={`p-2 border border-brand-border rounded bg-bg-base w-24 ${item.maxAvailable === 0 ? 'opacity-50' : ''}`} 
                               placeholder="Qty" 
-                              onChange={(e) => updateLineItemQty(index, Number(e.target.value))} 
+                              onChange={(e) => updateLineItemQty(index, parseInt(e.target.value) || 0)} 
                             />
                             <button type="button" onClick={() => setLineItems(lineItems.filter((_, i) => i !== index))} className="text-red-500">🗑️</button>
                             {item.warning && <div className="text-xs text-red-500 w-full">{item.warning}</div>}
@@ -235,12 +250,16 @@ export function OrdersPage() {
                 <div id="qr-reader" className="w-full"></div>
                 <button onClick={() => {
                     const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
-                    scanner.render(fulfillItem, (err) => console.log(err));
+                    scanner.render(fulfillItem, (err) => {
+                        if (err.includes("NotFoundException") || err.includes("No MultiFormat Readers")) return;
+                        console.warn(err);
+                    });
                 }} className="w-full mt-4 bg-brand-gold py-2 rounded text-white">Start Scanner</button>
                 <div className="mt-4 space-y-2">
                     {orderItems.filter(i => i.order_id === activeOrder.id).map(i => (
-                        <div key={i.id} className={`p-2 rounded ${i.is_fulfilled ? 'bg-emerald-900/20 text-emerald-500' : ''}`}>
-                            {i.stock_barcode}: {i.scanned_quantity} / {i.required_quantity}
+                        <div key={i.id} className={`p-2 rounded flex items-center justify-between ${i.is_fulfilled ? 'bg-emerald-900/20 text-emerald-500' : 'text-text-primary'}`}>
+                            <span>{i.stock_barcode}: {i.scanned_quantity} / {i.required_quantity}</span>
+                            {i.is_fulfilled && <CheckCircle2 size={16} />}
                         </div>
                     ))}
                 </div>

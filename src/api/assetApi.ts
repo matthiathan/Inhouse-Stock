@@ -309,8 +309,7 @@ export const deductStockQuantity = async (barcode: string, palletsToDeduct: numb
   const unitsPerBox = currentStock.units_per_box || 1;
   const boxesPerPallet = 48; // Defaulting
   
-  const currentTotalUnits = (currentStock.pallet_quantity * boxesPerPallet * unitsPerBox) + 
-                            (currentStock.box_quantity * unitsPerBox);
+  const currentTotalUnits = currentStock.quantity || 0;
 
   const totalDeduction = (palletsToDeduct * boxesPerPallet * unitsPerBox) + 
                          (boxesToDeduct * unitsPerBox) + 
@@ -322,8 +321,9 @@ export const deductStockQuantity = async (barcode: string, palletsToDeduct: numb
 
   const remainingTotalUnits = currentTotalUnits - totalDeduction;
 
-  const newPallets = Math.floor(remainingTotalUnits / (boxesPerPallet * unitsPerBox));
-  const remainingAfterPallets = remainingTotalUnits % (boxesPerPallet * unitsPerBox);
+  const unitsPerPallet = boxesPerPallet * unitsPerBox;
+  const newPallets = Math.floor(remainingTotalUnits / unitsPerPallet);
+  const remainingAfterPallets = remainingTotalUnits % unitsPerPallet;
   const newBoxes = Math.floor(remainingAfterPallets / unitsPerBox);
 
   return await updateStockQuantities(barcode, newPallets, newBoxes, remainingTotalUnits);
