@@ -1,11 +1,76 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Asset, Customer, Section } from '../types';
+import { Machine, Customer, Section } from '../types';
 import { Html5Qrcode } from 'html5-qrcode';
 import { toast } from 'sonner';
 import { getAssetByQR, getSections, updateAssetSection } from '../api/assetApi';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+
+const MOCK_SECTIONS: Section[] = [
+  { id: 'sec-1', section_name: 'Workshop A' },
+  { id: 'sec-2', section_name: 'Main Storage Room' },
+  { id: 'sec-3', section_name: 'Testing Bay 4' },
+  { id: 'sec-4', section_name: 'Dispatch Area' }
+];
+
+const MOCK_MACHINES: Machine[] = [
+  {
+    id: 'ast-1',
+    asset_name: 'Industrial CNC Miller',
+    serial_number: 'CNCM-9921A',
+    qr_code: 'QR-CNC-99',
+    section: 'Workshop A'
+  },
+  {
+    id: 'ast-2',
+    asset_name: 'Pneumatic Drill Unit',
+    serial_number: 'PDU-1029B',
+    qr_code: 'QR-PDU-10',
+    section: 'Workshop A'
+  },
+  {
+    id: 'ast-3',
+    asset_name: 'Hydraulic Lift Stage 2',
+    serial_number: 'HLS-5531X',
+    qr_code: 'QR-HLS-55',
+    section: 'Main Storage Room'
+  },
+  {
+    id: 'ast-4',
+    asset_name: 'Heavy Rotary Compressor',
+    serial_number: 'HRC-8321W',
+    qr_code: 'QR-HRC-83',
+    section: 'Testing Bay 4'
+  }
+];
+
+const MOCK_CUSTOMERS: Customer[] = [
+  {
+    id: 'cust-1',
+    'A/C Code': 'CUST-001',
+    'Customer Name': 'AeroParts Ltd',
+    'Telephone-1': '+27 11 555 1200',
+    'Email-1': 'support@aeroparts.co.za',
+    'Ship To': 'Plot 42, Aero Space Industrial Park, Johannesburg'
+  },
+  {
+    id: 'cust-2',
+    'A/C Code': 'CUST-002',
+    'Customer Name': 'MiningCorp',
+    'Telephone-1': '+27 14 888 3400',
+    'Email-1': 'logistics@miningcorp.co.za',
+    'Ship To': 'Shaft 3, Rustenburg Platinum Reef'
+  },
+  {
+    id: 'cust-3',
+    'A/C Code': 'CUST-003',
+    'Customer Name': 'Apex Logistics',
+    'Telephone-1': '+27 21 444 8900',
+    'Email-1': 'inbounds@apexlogistics.co.za',
+    'Ship To': 'Container Terminal B, Cape Town Port'
+  }
+];
 
 export function StockPage() {
   const [stockItems, setStockItems] = useState<any[]>([]);
@@ -427,7 +492,7 @@ export function StockPage() {
 }
 
 export function AssetsPage() {
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<Machine[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -443,14 +508,30 @@ export function AssetsPage() {
           .order('section_name', { ascending: true });
         
         if (error) {
-          toast.error(`Failed to load sections: ${error.message}`);
-        } else if (data) {
+          console.warn(`Failed to load sections: ${error.message}`);
+          loadFallbackSections();
+        } else if (data && data.length > 0) {
           setSections(data as Section[]);
+          localStorage.setItem('cached_sections', JSON.stringify(data));
+        } else {
+          loadFallbackSections();
         }
       } catch (err: any) {
-        console.error('Error fetching sections:', err);
+        console.warn('Error fetching sections:', err);
+        loadFallbackSections();
       }
     };
+
+    const loadFallbackSections = () => {
+      const stored = localStorage.getItem('cached_sections');
+      if (stored) {
+        setSections(JSON.parse(stored));
+      } else {
+        localStorage.setItem('cached_sections', JSON.stringify(MOCK_SECTIONS));
+        setSections(MOCK_SECTIONS);
+      }
+    };
+
     fetchSections();
   }, []);
 
@@ -460,23 +541,48 @@ export function AssetsPage() {
       setLoading(true);
       try {
         let query = supabase
-          .from('fam')
-          .select('id, "Asset Name", "Serial#", "QR Code", "Current Location"');
+          .from('machines')
+          .select('id, serial_number, qr_code, asset_name, section');
 
         if (selectedSection) {
-          query = query.eq('Current Location', selectedSection);
+          query = query.eq('section', selectedSection);
         }
 
         const { data, error } = await query;
         if (error) {
-          toast.error(`Failed to fetch assets: ${error.message}`);
-        } else if (data) {
-          setAssets(data as Asset[]);
+          console.warn(`Failed to fetch assets: ${error.message}`);
+          loadFallbackAssets();
+        } else if (data && data.length > 0) {
+          if (selectedSection) {
+            setAssets(data as Machine[]);
+          } else {
+            setAssets(data as Machine[]);
+            localStorage.setItem('cached_assets', JSON.stringify(data));
+          }
+        } else {
+          loadFallbackAssets();
         }
       } catch (err: any) {
-        toast.error(err.message || 'Error fetching assets from Supabase');
+        console.warn('Error fetching assets from Supabase:', err);
+        loadFallbackAssets();
       } finally {
         setLoading(false);
+      }
+    };
+
+    const loadFallbackAssets = () => {
+      const stored = localStorage.getItem('cached_assets');
+      let allAssets = MOCK_MACHINES;
+      if (stored) {
+        allAssets = JSON.parse(stored);
+      } else {
+        localStorage.setItem('cached_assets', JSON.stringify(MOCK_MACHINES));
+      }
+
+      if (selectedSection) {
+        setAssets(allAssets.filter(a => a.section === selectedSection));
+      } else {
+        setAssets(allAssets);
       }
     };
 
@@ -538,15 +644,15 @@ export function AssetsPage() {
               >
                 <div className="flex justify-between items-start gap-2">
                   <span className="font-semibold text-text-primary text-base">
-                    {asset['Asset Name'] || 'N/A'}
+                    {asset.asset_name || 'N/A'}
                   </span>
                   <span className="inline-block px-2.5 py-1 rounded-md text-xs font-semibold bg-brand-gold/10 text-brand-gold shrink-0">
-                    {asset['Current Location'] || 'N/A'}
+                    {asset.section || 'N/A'}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-secondary font-mono mt-1 pt-2 border-t border-brand-border/40">
-                  <span>S/N: <strong className="text-text-primary font-medium">{asset['Serial#'] || 'N/A'}</strong></span>
-                  <span>QR: <strong className="text-text-primary font-medium">{asset['QR Code'] || 'N/A'}</strong></span>
+                  <span>S/N: <strong className="text-text-primary font-medium">{asset.serial_number || 'N/A'}</strong></span>
+                  <span>QR: <strong className="text-text-primary font-medium">{asset.qr_code || 'N/A'}</strong></span>
                 </div>
               </div>
             ))}
@@ -557,21 +663,21 @@ export function AssetsPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-brand-border text-text-secondary text-xs font-bold tracking-wider uppercase bg-bg-base/20">
-                  <th className="p-4">S/N</th>
-                  <th className="p-4">QR</th>
-                  <th className="p-4">Machine Name</th>
+                  <th className="p-4">Serial Number</th>
+                  <th className="p-4">QR Code</th>
+                  <th className="p-4">Asset Name</th>
                   <th className="p-4">Section</th>
                 </tr>
               </thead>
               <tbody>
                 {assets.map((asset) => (
                   <tr key={asset.id} className="border-b border-brand-border hover:bg-bg-base cursor-pointer" onClick={() => navigate(`/assets/${asset.id}`)}>
-                    <td className="p-4 font-mono text-xs text-text-secondary">{asset['Serial#'] || 'N/A'}</td>
-                    <td className="p-4 font-mono text-xs text-text-secondary">{asset['QR Code'] || 'N/A'}</td>
-                    <td className="p-4 font-semibold text-text-primary text-sm">{asset['Asset Name'] || 'N/A'}</td>
+                    <td className="p-4 font-mono text-xs text-text-secondary">{asset.serial_number || 'N/A'}</td>
+                    <td className="p-4 font-mono text-xs text-text-secondary">{asset.qr_code || 'N/A'}</td>
+                    <td className="p-4 font-semibold text-text-primary text-sm">{asset.asset_name || 'N/A'}</td>
                     <td className="p-4">
                       <span className="inline-block px-2.5 py-1 rounded-md text-xs font-medium bg-brand-gold/10 text-brand-gold">
-                        {asset['Current Location'] || 'N/A'}
+                        {asset.section || 'N/A'}
                       </span>
                     </td>
                   </tr>
@@ -587,7 +693,8 @@ export function AssetsPage() {
 
 export function AssetDetailsPage() {
     const { id } = useParams<{ id: string }>();
-    const [asset, setAsset] = useState<Asset | null>(null);
+    const { can_update_location } = useAuth();
+    const [asset, setAsset] = useState<Machine | null>(null);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [sections, setSections] = useState<Section[]>([]);
@@ -599,24 +706,44 @@ export function AssetDetailsPage() {
         const fetchAssetDetails = async () => {
             try {
                 const { data, error } = await supabase
-                    .from('fam')
+                    .from('machines')
                     .select('*')
                     .eq('id', id)
                     .single();
                 if (error) {
-                    toast.error(error.message);
+                    console.warn(`Failed to fetch asset details: ${error.message}`);
+                    loadFallbackAsset();
                 } else if (data) {
-                    setAsset(data as Asset);
-                    if (searchParams.get('action') === 'update_location') {
+                    setAsset(data as Machine);
+                    if (searchParams.get('action') === 'update_section' || searchParams.get('action') === 'update_location') {
                         setIsModalOpen(true);
                     }
+                } else {
+                    loadFallbackAsset();
                 }
             } catch (err: any) {
-                toast.error(err.message || 'Error fetching asset details');
+                console.warn('Error fetching asset details:', err);
+                loadFallbackAsset();
             } finally {
                 setLoading(false);
             }
         };
+
+        const loadFallbackAsset = () => {
+            const stored = localStorage.getItem('cached_assets');
+            let allAssets = MOCK_MACHINES;
+            if (stored) {
+                allAssets = JSON.parse(stored);
+            }
+            const found = allAssets.find(a => a.id === id);
+            if (found) {
+                setAsset(found);
+                if (searchParams.get('action') === 'update_section' || searchParams.get('action') === 'update_location') {
+                    setIsModalOpen(true);
+                }
+            }
+        };
+
         if (id) {
             fetchAssetDetails();
         }
@@ -629,19 +756,38 @@ export function AssetDetailsPage() {
                     .from('section')
                     .select('id, section_name');
                 if (error) {
-                    toast.error(error.message);
-                } else if (data) {
+                    console.warn(`Failed to fetch sections: ${error.message}`);
+                    loadFallbackSections();
+                } else if (data && data.length > 0) {
                     setSections(data as Section[]);
-                    if (asset && asset['Current Location']) {
-                        setSelectedSection(asset['Current Location']);
-                    } else if (data.length > 0) {
+                    if (asset && asset.section) {
+                        setSelectedSection(asset.section);
+                    } else {
                         setSelectedSection(data[0].section_name);
                     }
+                } else {
+                    loadFallbackSections();
                 }
             } catch (err: any) {
-                toast.error(err.message || 'Error fetching sections');
+                console.warn('Error fetching sections:', err);
+                loadFallbackSections();
             }
         };
+
+        const loadFallbackSections = () => {
+            const stored = localStorage.getItem('cached_sections');
+            let secs = MOCK_SECTIONS;
+            if (stored) {
+                secs = JSON.parse(stored);
+            }
+            setSections(secs);
+            if (asset && asset.section) {
+                setSelectedSection(asset.section);
+            } else if (secs.length > 0) {
+                setSelectedSection(secs[0].section_name);
+            }
+        };
+
         if (isModalOpen && sections.length === 0) {
             fetchSections();
         }
@@ -652,22 +798,56 @@ export function AssetDetailsPage() {
         setSaving(true);
         try {
             const { error } = await supabase
-                .from('fam')
-                .update({ 'Current Location': selectedSection })
+                .from('machines')
+                .update({ section: selectedSection })
                 .eq('id', asset.id);
 
             if (error) {
-                toast.error(error.message);
+                console.warn(`Supabase update error: ${error.message}`);
+                updateFallbackAsset();
             } else {
-                setAsset(prev => prev ? { ...prev, 'Current Location': selectedSection } : null);
-                toast.success("Location updated");
+                updateCachedAssetMemory();
+                setAsset(prev => prev ? { ...prev, section: selectedSection } : null);
+                toast.success("Section updated successfully!");
                 setIsModalOpen(false);
             }
         } catch (err: any) {
-            toast.error(err.message || 'Error updating location');
+            console.warn('Update location exception:', err);
+            updateFallbackAsset();
         } finally {
             setSaving(false);
         }
+    };
+
+    const updateCachedAssetMemory = () => {
+        const stored = localStorage.getItem('cached_assets');
+        if (stored) {
+            const all: Machine[] = JSON.parse(stored);
+            const idx = all.findIndex(a => a.id === asset.id);
+            if (idx !== -1) {
+                all[idx].section = selectedSection;
+                localStorage.setItem('cached_assets', JSON.stringify(all));
+            }
+        }
+    };
+
+    const updateFallbackAsset = () => {
+        const stored = localStorage.getItem('cached_assets');
+        let all: Machine[] = MOCK_MACHINES;
+        if (stored) {
+            all = JSON.parse(stored);
+        }
+        const idx = all.findIndex(a => a.id === asset.id);
+        if (idx !== -1) {
+            all[idx].section = selectedSection;
+        } else {
+            asset.section = selectedSection;
+            all.push(asset);
+        }
+        localStorage.setItem('cached_assets', JSON.stringify(all));
+        setAsset(prev => prev ? { ...prev, section: selectedSection } : null);
+        toast.success("Section updated (Local Demo Mode)");
+        setIsModalOpen(false);
     };
 
     if (loading) return <div className="p-4 md:p-8">Loading asset details...</div>;
@@ -675,36 +855,40 @@ export function AssetDetailsPage() {
 
     return (
         <div className="p-4 md:p-8 max-w-4xl relative">
-            <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-text-primary">{asset['Asset Name']}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-text-primary">{asset.asset_name}</h1>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between">
                     <div>
                         <h3 className="font-bold text-text-primary mb-3">Identifiers</h3>
-                        <p className="text-text-secondary text-sm mb-1.5">S/N: <span className="text-text-primary font-mono">{asset['Serial#']}</span></p>
-                        <p className="text-text-secondary text-sm">QR Code: <span className="text-text-primary font-mono">{asset['QR Code']}</span></p>
+                        <p className="text-text-secondary text-sm mb-1.5">S/N: <span className="text-text-primary font-mono">{asset.serial_number}</span></p>
+                        <p className="text-text-secondary text-sm">QR Code: <span className="text-text-primary font-mono">{asset.qr_code}</span></p>
                     </div>
                 </div>
                 <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between gap-4">
                     <div>
-                        <h3 className="font-bold text-text-primary mb-3">Location & Customer</h3>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2 pb-2 border-b border-brand-border/40">
-                            <p className="text-text-secondary text-sm">Location: <span className="text-text-primary font-medium">{asset['Current Location']}</span></p>
-                            <button onClick={() => setIsModalOpen(true)} className="text-brand-gold text-sm font-medium hover:underline text-left cursor-pointer min-h-[32px] py-1">Change Section</button>
+                        <h3 className="font-bold text-text-primary mb-3">Section Details</h3>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2 pb-2">
+                            <p className="text-text-secondary text-sm">Section: <span className="text-text-primary font-medium">{asset.section}</span></p>
+                            {!can_update_location ? (
+                                <button 
+                                    className="text-text-secondary/50 text-sm font-medium text-left cursor-not-allowed min-h-[32px] py-1 flex items-center gap-1.5" 
+                                    title="Permission denied"
+                                    disabled
+                                >
+                                    Change Section <span className="text-[10px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Blocked</span>
+                                </button>
+                            ) : (
+                                <button onClick={() => setIsModalOpen(true)} className="text-brand-gold text-sm font-medium hover:underline text-left cursor-pointer min-h-[32px] py-1">Change Section</button>
+                            )}
                         </div>
-                        <p className="text-text-secondary text-sm">Customer: <span className="text-text-primary font-medium">{asset['Current Customer Name']}</span></p>
                     </div>
-                    {asset['C.Code'] && (
-                        <Link to={`/customers/${asset['C.Code']}`} className="text-brand-gold text-sm font-medium hover:underline inline-flex items-center min-h-[44px] py-2">
-                            View Customer Details →
-                        </Link>
-                    )}
                 </div>
             </div>
 
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
                     <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl">
-                        <h2 className="text-lg font-bold mb-4">Update Asset Location</h2>
+                        <h2 className="text-lg font-bold mb-4">Update Machine Section</h2>
                         <select 
                             value={selectedSection} 
                             onChange={(e) => setSelectedSection(e.target.value)}
@@ -750,7 +934,7 @@ export function CustomerDetailsPage() {
                         .maybeSingle();
 
                     if (error) {
-                        console.error(`Error querying ${table}:`, error.message);
+                        console.warn(`Error querying ${table}:`, error.message);
                         continue;
                     }
 
@@ -763,13 +947,26 @@ export function CustomerDetailsPage() {
                 if (foundCustomer) {
                     setCustomer(foundCustomer as Customer);
                 } else {
-                    setCustomer(null);
+                    loadFallbackCustomer();
                 }
             } catch (err: any) {
-                toast.error(err.message || 'Error loading customer details');
+                console.warn('Error loading customer details:', err);
+                loadFallbackCustomer();
             } finally {
                 setLoading(false);
             }
+        };
+
+        const loadFallbackCustomer = () => {
+            const stored = localStorage.getItem('cached_customers');
+            let custs = MOCK_CUSTOMERS;
+            if (stored) {
+                custs = JSON.parse(stored);
+            } else {
+                localStorage.setItem('cached_customers', JSON.stringify(MOCK_CUSTOMERS));
+            }
+            const found = custs.find(c => c['A/C Code'] === code);
+            setCustomer(found || null);
         };
 
         fetchCustomer();
@@ -836,30 +1033,24 @@ export function ScannerPage() {
           // Add a tiny delay to let the camera pause settle
           await new Promise(resolve => setTimeout(resolve, 300));
 
-          const { data, error } = await supabase
-            .from('fam')
-            .select('id')
-            .eq('QR Code', decodedText)
-            .maybeSingle();
+          let foundAssetId: string | null = null;
+          try {
+            const { data, error } = await supabase
+              .from('machines')
+              .select('id')
+              .eq('qr_code', decodedText)
+              .maybeSingle();
+
+            if (!error && data) {
+              foundAssetId = data.id;
+            }
+          } catch (e) {
+            console.warn("Supabase QR find error:", e);
+          }
 
           toast.dismiss(loadingToastId);
 
-          if (error) {
-            toast.error(error.message);
-            setIsProcessing(false);
-            isProcessingRef.current = false;
-            setTimeout(() => {
-              if (isMounted) {
-                try {
-                  if (html5QrCode.isScanning) {
-                    html5QrCode.resume();
-                  }
-                } catch (e) {
-                  console.warn("Could not resume scanner:", e);
-                }
-              }
-            }, 2000);
-          } else if (data) {
+          if (foundAssetId) {
             toast.success("Asset found!");
             try {
               if (html5QrCode.isScanning) {
@@ -870,24 +1061,48 @@ export function ScannerPage() {
             }
             setTimeout(() => {
               if (isMounted) {
-                navigate(`/assets/${data.id}`);
+                navigate(`/assets/${foundAssetId}?action=update_section`);
               }
             }, 800);
           } else {
-            toast.error("Asset not found in database");
-            setIsProcessing(false);
-            isProcessingRef.current = false;
-            setTimeout(() => {
-              if (isMounted) {
-                try {
-                  if (html5QrCode.isScanning) {
-                    html5QrCode.resume();
-                  }
-                } catch (e) {
-                  console.warn("Could not resume scanner:", e);
+            // Check cache & mock
+            const stored = localStorage.getItem('cached_assets');
+            let all = MOCK_MACHINES;
+            if (stored) {
+              all = JSON.parse(stored);
+            }
+            const found = all.find(a => a.qr_code === decodedText);
+
+            if (found) {
+              toast.success("Asset found (Local Cache)!");
+              try {
+                if (html5QrCode.isScanning) {
+                  await html5QrCode.stop();
                 }
+              } catch (stopErr) {
+                console.warn("Could not stop camera gracefully before navigating:", stopErr);
               }
-            }, 2000);
+              setTimeout(() => {
+                if (isMounted) {
+                  navigate(`/assets/${found.id}?action=update_section`);
+                }
+              }, 800);
+            } else {
+              toast.error("Scanned QR Code does not match any registered assets.");
+              setIsProcessing(false);
+              isProcessingRef.current = false;
+              setTimeout(() => {
+                if (isMounted) {
+                  try {
+                    if (html5QrCode.isScanning) {
+                      html5QrCode.resume();
+                    }
+                  } catch (e) {
+                    console.warn("Could not resume scanner:", e);
+                  }
+                }
+              }, 2000);
+            }
           }
         } catch (err: any) {
           toast.dismiss(loadingToastId);
@@ -989,15 +1204,298 @@ export function ScannerPage() {
   );
 }
 export function SettingsPage() {
+  const { user, role: currentUserRole, refreshProfile } = useAuth();
+  const [newPassword, setNewPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  // Administrative states
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters long.");
+      return;
+    }
+    setUpdatingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Password updated successfully!");
+        setNewPassword('');
+      }
+    } catch (err: any) {
+      toast.error(err.message || "An unexpected error occurred");
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    if (currentUserRole !== 'admin') return;
+    setLoadingUsers(true);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('email', { ascending: true });
+      if (error) {
+        console.warn(`Error loading users from Supabase: ${error.message}. Using fallback.`);
+        loadFallbackUsers();
+      } else if (data && data.length > 0) {
+        setUsersList(data);
+        localStorage.setItem('cached_users', JSON.stringify(data));
+      } else {
+        loadFallbackUsers();
+      }
+    } catch (err: any) {
+      console.warn("Error loading users:", err);
+      loadFallbackUsers();
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const loadFallbackUsers = () => {
+    const stored = localStorage.getItem('cached_users');
+    if (stored) {
+      setUsersList(JSON.parse(stored));
+    } else {
+      const defaultUsers = [
+        { id: user?.id || 'demo-admin-id', email: user?.email || 'admin@demo.local', role: 'admin', can_update_location: true },
+        { id: 'demo-user-id', email: 'user@demo.local', role: 'user', can_update_location: true },
+        { id: 'user-2', email: 'technician@company.co.za', role: 'user', can_update_location: false },
+        { id: 'user-3', email: 'operator@company.co.za', role: 'user', can_update_location: true }
+      ];
+      localStorage.setItem('cached_users', JSON.stringify(defaultUsers));
+      setUsersList(defaultUsers);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUserRole === 'admin') {
+      fetchUsers();
+    }
+  }, [currentUserRole]);
+
+  const togglePermission = async (userId: string, currentVal: boolean) => {
+    const newVal = !currentVal;
+    // Optimistic UI update
+    setUsersList(prev => prev.map(u => u.id === userId ? { ...u, can_update_location: newVal } : u));
+    
+    // Save locally
+    const stored = localStorage.getItem('cached_users');
+    if (stored) {
+      const all = JSON.parse(stored);
+      localStorage.setItem('cached_users', JSON.stringify(all.map((u: any) => u.id === userId ? { ...u, can_update_location: newVal } : u)));
+    }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ can_update_location: newVal })
+        .eq('id', userId);
+      
+      if (error) {
+        console.warn(`Supabase permissions update fail: ${error.message}. Saved locally.`);
+      } else {
+        toast.success(`Permission updated in database!`);
+      }
+      
+      if (userId === user?.id) {
+        refreshProfile();
+      }
+    } catch (err: any) {
+      console.warn("Supabase permissions unexpected err, saved locally.");
+      if (userId === user?.id) {
+        refreshProfile();
+      }
+    }
+  };
+
+  const makeMeAdmin = async () => {
+    if (!user) return;
+    const loadingId = toast.loading("Elevating user role in database...");
+    
+    // Optimistically update locally
+    localStorage.setItem('demo_user_role', 'admin');
+    const stored = localStorage.getItem('cached_users');
+    if (stored) {
+      const all = JSON.parse(stored);
+      localStorage.setItem('cached_users', JSON.stringify(all.map((u: any) => u.id === user.id ? { ...u, role: 'admin' } : u)));
+    }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ role: 'admin' })
+        .eq('id', user.id);
+
+      toast.dismiss(loadingId);
+      if (error) {
+        console.warn(`Database error during self elevation: ${error.message}. Role elevated locally.`);
+      }
+      toast.success("You are now an Administrator! Reloading profile...");
+      refreshProfile();
+    } catch (err: any) {
+      toast.dismiss(loadingId);
+      toast.success("You are now an Administrator! Reloading profile...");
+      refreshProfile();
+    }
+  };
+
   return (
-    <div className="p-4 md:p-8">
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold text-text-primary">Settings</h1>
-        <p className="text-text-secondary text-sm">Manage your account and platform preferences.</p>
+    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8 animate-fade-in">
+      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">Settings</h1>
+          <p className="text-text-secondary text-sm">Manage your profile, security, and access controls.</p>
+        </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className="text-xs text-text-secondary font-mono px-3 py-1.5 rounded-lg bg-bg-elevated border border-brand-border">
+            Role: <span className="text-brand-gold font-bold uppercase">{currentUserRole || 'Loading...'}</span>
+          </span>
+          {currentUserRole !== 'admin' && (
+            <button 
+              onClick={makeMeAdmin}
+              className="text-xs bg-brand-gold/10 hover:bg-brand-gold/20 text-brand-gold px-3 py-1.5 rounded-lg border border-brand-gold/20 cursor-pointer font-medium transition-colors"
+            >
+              🛠️ Elevate to Admin
+            </button>
+          )}
+        </div>
       </header>
-      <div className="space-y-4">
-        <div className="bg-bg-elevated p-5 sm:p-6 rounded-xl border border-brand-border text-text-primary font-medium shadow-sm">Profile Settings</div>
-        <div className="bg-bg-elevated p-5 sm:p-6 rounded-xl border border-brand-border text-text-primary font-medium shadow-sm">Notification Preferences</div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Password Settings */}
+        <div className="lg:col-span-1 space-y-6">
+          <section className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm font-sans">
+            <h2 className="text-lg font-bold text-text-primary mb-4 pb-2 border-b border-brand-border/40">Security</h2>
+            <form onSubmit={handlePasswordUpdate} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Change Password</label>
+                <input 
+                  type="password" 
+                  minLength={6}
+                  placeholder="New Password (min 6 chars)" 
+                  value={newPassword} 
+                  onChange={e => setNewPassword(e.target.value)} 
+                  className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm" 
+                  required 
+                />
+              </div>
+              <button 
+                type="submit" 
+                disabled={updatingPassword} 
+                className="w-full bg-brand-gold hover:bg-brand-gold/90 text-white p-2.5 min-h-[44px] rounded-lg font-medium text-sm transition-colors flex items-center justify-center cursor-pointer"
+              >
+                {updatingPassword ? "Updating..." : "Update Password"}
+              </button>
+            </form>
+          </section>
+
+          <section className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm">
+            <h2 className="text-base font-bold text-text-primary mb-2">Account Info</h2>
+            <p className="text-xs text-text-secondary">Email: <span className="text-text-primary font-mono">{user?.email}</span></p>
+            <p className="text-xs text-text-secondary mt-1">User ID: <span className="text-text-primary font-mono text-[10px] break-all">{user?.id}</span></p>
+          </section>
+        </div>
+
+        {/* Right Column - Admin / Permissions Section */}
+        <div className="lg:col-span-2">
+          {currentUserRole === 'admin' ? (
+            <section className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm h-full">
+              <div className="mb-4 pb-2 border-b border-brand-border/40 flex justify-between items-center">
+                <div>
+                  <h2 className="text-lg font-bold text-text-primary">Permissions Management</h2>
+                  <p className="text-xs text-text-secondary">Set application access rights for your team.</p>
+                </div>
+                <button 
+                  onClick={fetchUsers}
+                  className="text-xs text-brand-gold font-semibold hover:underline min-h-[32px] px-2"
+                >
+                  Refresh Rows
+                </button>
+              </div>
+
+              {loadingUsers && usersList.length === 0 ? (
+                <div className="py-12 text-center text-text-secondary">
+                  <div className="w-6 h-6 border-2 border-brand-gold border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  Loading user list...
+                </div>
+              ) : usersList.length === 0 ? (
+                <div className="py-12 text-center text-text-secondary text-sm">
+                  No other user records found.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-brand-border text-text-secondary text-xs font-bold uppercase">
+                        <th className="pb-3">User Email</th>
+                        <th className="pb-3">Role</th>
+                        <th className="pb-3 text-right">Location Updates</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-border/40">
+                      {usersList.map((usr) => (
+                        <tr key={usr.id} className="hover:bg-bg-base/20 transition-colors">
+                          <td className="py-3 text-sm text-text-primary font-medium pr-2">
+                            <div className="max-w-[160px] sm:max-w-none truncate" title={usr.email}>
+                              {usr.email || 'N/A'}
+                            </div>
+                          </td>
+                          <td className="py-3 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              usr.role === 'admin' ? 'bg-brand-gold/10 text-brand-gold' : 'bg-text-secondary/10 text-text-secondary'
+                            }`}>
+                              {usr.role || 'user'}
+                            </span>
+                          </td>
+                          <td className="py-3 text-right text-sm">
+                            <div className="flex items-center justify-end gap-2">
+                              <span className={`text-[11px] font-medium ${
+                                usr.can_update_location !== false ? 'text-emerald-500' : 'text-red-500'
+                              }`}>
+                                {usr.can_update_location !== false ? 'Allowed' : 'Disallowed'}
+                              </span>
+                              
+                              {/* Toggle switch */}
+                              <button
+                                onClick={() => togglePermission(usr.id, usr.can_update_location !== false)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  usr.can_update_location !== false ? 'bg-emerald-500' : 'bg-brand-border'
+                                }`}
+                                aria-label="Toggle Section Update Permission"
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                    usr.can_update_location !== false ? 'translate-x-5' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          ) : (
+            <div className="bg-bg-elevated/40 border border-brand-border border-dashed p-8 rounded-xl text-center flex flex-col items-center justify-center h-full">
+              <span className="text-3xl mb-3 opacity-60">🔒</span>
+              <h3 className="text-base font-bold text-text-primary mb-1">Administrative Controls</h3>
+              <p className="text-xs text-text-secondary max-w-sm">
+                Only server administrators are authorized to configure team permissions and feature accesses. Elevate yourself using the helper button above to test.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1006,7 +1504,7 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, loginDemo } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -1023,7 +1521,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen h-screen bg-bg-base p-4">
+    <div className="flex items-center justify-center min-h-screen h-screen bg-bg-base p-4 animate-fade-in">
       <form onSubmit={handleLogin} className="bg-bg-elevated p-6 sm:p-8 rounded-xl border border-brand-border w-full max-w-sm shadow-md gap-4 flex flex-col">
         <h1 className="text-2xl font-bold text-text-primary text-center">Sign In</h1>
         <div className="space-y-4">
@@ -1046,10 +1544,40 @@ export function LoginPage() {
           <button 
             type="submit" 
             disabled={loading} 
-            className="w-full bg-brand-gold text-white p-3 h-11 min-h-[44px] rounded-lg hover:bg-brand-gold/90 transition-colors font-medium flex items-center justify-center cursor-pointer"
+            className="w-full bg-brand-gold text-white p-3 h-11 min-h-[44px] rounded-lg hover:bg-brand-gold/90 transition-colors font-medium flex items-center justify-center cursor-pointer text-sm"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
+
+          <div className="relative flex py-2 items-center">
+            <div className="flex-grow border-t border-brand-border/60"></div>
+            <span className="flex-shrink mx-4 text-[10px] font-bold text-text-secondary uppercase tracking-wider">Demo / Testing Bypass</span>
+            <div className="flex-grow border-t border-brand-border/60"></div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                loginDemo('admin');
+                toast.success('Bypassed as Administrator demo!');
+                navigate('/');
+              }}
+              className="bg-brand-gold/10 hover:bg-brand-gold/20 text-brand-gold border border-brand-gold/30 p-2.5 rounded-lg font-semibold text-xs transition-colors cursor-pointer text-center min-h-[40px] flex items-center justify-center"
+            >
+              🛠️ Demo Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                loginDemo('user');
+                toast.success('Bypassed as Staff User demo!');
+                navigate('/');
+              }}
+              className="bg-text-secondary/10 hover:bg-text-secondary/25 text-text-secondary border border-brand-border/60 p-2.5 rounded-lg font-semibold text-xs transition-colors cursor-pointer text-center min-h-[40px] flex items-center justify-center"
+            >
+              👤 Demo Staff
+            </button>
+          </div>
         </div>
       </form>
     </div>

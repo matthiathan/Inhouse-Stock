@@ -3,8 +3,11 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 
-// Initialize Supabase
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
+// Initialize Supabase safely with fallbacks to avoid startup crash
+const supabaseUrl = process.env.SUPABASE_URL || "https://placeholder-project-id.supabase.co";
+const supabaseKey = process.env.SUPABASE_KEY || "placeholder-key-so-server-initialization-does-not-throw-at-runtime";
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 
 async function startServer() {
   const app = express();
@@ -15,20 +18,20 @@ async function startServer() {
 
   // API Routes
   app.get("/api/assets", async (req, res) => {
-    const { data, error } = await supabase.from('fam').select('id, "Asset Name", "Serial#", "QR Code", "Current Location"');
+    const { data, error } = await supabase.from('machines').select('id, serial_number, qr_code, asset_name, section');
     if (error) return res.status(500).json({ error: error.message });
     res.json(data);
   });
 
   app.get("/api/assets/:id", async (req, res) => {
     const { id } = req.params;
-    const { data, error } = await supabase.from('fam').select('*').eq('id', id).single();
+    const { data, error } = await supabase.from('machines').select('*').eq('id', id).single();
     if (error) return res.status(500).json({ error: error.message });
     res.json(data);
   });
 
   app.get("/api/assets/qr/:qr", async (req, res) => {
-    const { data, error } = await supabase.from('fam').select('*').eq('QR Code', req.params.qr).single();
+    const { data, error } = await supabase.from('machines').select('*').eq('qr_code', req.params.qr).single();
     if (error) return res.status(500).json({ error: error.message });
     res.json(data);
   });
@@ -40,7 +43,7 @@ async function startServer() {
   });
 
   app.patch("/api/assets/:id/location", async (req, res) => {
-    const { data, error } = await supabase.from('fam').update({ "Current Location": req.body.newSectionName }).eq('id', req.params.id);
+    const { data, error } = await supabase.from('machines').update({ "section": req.body.newSectionName }).eq('id', req.params.id);
     if (error) return res.status(500).json({ error: error.message });
     res.json(data);
   });

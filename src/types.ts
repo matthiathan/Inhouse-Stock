@@ -1,12 +1,9 @@
-export interface Asset {
+export interface Machine {
   id: string;
-  'Asset Name': string;
-  'Serial#': string;
-  'QR Code': string;
-  'Current Location': string;
-  'Current Customer Name': string;
-  'C.Code': string;
-  [key: string]: any;
+  serial_number: string;
+  qr_code: string;
+  asset_name: string;
+  section: string;
 }
 
 export interface Customer {
