@@ -1580,7 +1580,7 @@ export function ScannerPage() {
   );
 }
 export function SettingsPage() {
-  const { user, role: currentUserRole, refreshProfile } = useAuth();
+  const { user, role: currentUserRole, refreshProfile, logout } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [updatingPassword, setUpdatingPassword] = useState(false);
 
@@ -1781,6 +1781,12 @@ export function SettingsPage() {
             <h2 className="text-base font-bold text-text-primary mb-2">Account Info</h2>
             <p className="text-xs text-text-secondary">Email: <span className="text-text-primary font-mono">{user?.email}</span></p>
             <p className="text-xs text-text-secondary mt-1">User ID: <span className="text-text-primary font-mono text-[10px] break-all">{user?.id}</span></p>
+            <button
+              onClick={logout}
+              className="mt-4 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-500 px-3 py-1.5 rounded-lg border border-red-500/20 cursor-pointer font-medium transition-colors"
+            >
+              Sign Out
+            </button>
           </section>
         </div>
 
