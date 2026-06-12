@@ -1,12 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { Package, Database, QrCode, Settings } from 'lucide-react';
+import { Package, Database, QrCode, Settings, BarChart3 } from 'lucide-react';
 
 export default function DashboardLayout() {
   const navItems = [
     { name: 'Stock', path: '/stock', icon: Package },
     { name: 'Assets', path: '/assets', icon: Database },
     { name: 'Scanner', path: '/scanner', icon: QrCode },
+    { name: 'Analytics', path: '/analytics', icon: BarChart3 },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
 

@@ -8,7 +8,8 @@ import {
   Sun,
   Moon,
   LogOut,
-  User as UserIcon
+  User as UserIcon,
+  BarChart3
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -21,6 +22,7 @@ export default function Sidebar() {
     { name: 'Stock', path: '/stock', icon: Package },
     { name: 'Assets', path: '/assets', icon: Database },
     { name: 'Scanner', path: '/scanner', icon: QrCode },
+    { name: 'Analytics', path: '/analytics', icon: BarChart3 },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
 

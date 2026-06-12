@@ -7,7 +7,8 @@ import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineMo
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
-
+export { AnalyticsPage } from './AnalyticsPage';
+export { AssetDetailsPage } from './AssetDetailsPage';
 
 export function StockPage() {
   const [stockItems, setStockItems] = useState<any[]>([]);
@@ -1142,159 +1143,8 @@ export function AssetsPage() {
   );
 }
 
-export function AssetDetailsPage() {
-    const { id } = useParams<{ id: string }>();
-    const { can_update_location } = useAuth();
-    const [asset, setAsset] = useState<Machine | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [sections, setSections] = useState<Section[]>([]);
-    const [selectedSection, setSelectedSection] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [searchParams] = useSearchParams();
+// AssetDetailsPage is now loaded as a standalone component from ./AssetDetailsPage
 
-    useEffect(() => {
-        const fetchAssetDetails = async () => {
-            try {
-                const { data, error } = await supabase
-                    .from('machines')
-                    .select('*')
-                    .eq('id', id)
-                    .single();
-                if (error) {
-                    toast.error(`Failed to fetch asset details: ${error.message}`);
-                    setAsset(null);
-                } else if (data) {
-                    setAsset(data as Machine);
-                    if (searchParams.get('action') === 'update_section' || searchParams.get('action') === 'update_location') {
-                        setIsModalOpen(true);
-                    }
-                } else {
-                    setAsset(null);
-                }
-            } catch (err: any) {
-                toast.error(`Error fetching asset details: ${err.message || 'Unknown error'}`);
-                setAsset(null);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (id) {
-            fetchAssetDetails();
-        }
-    }, [id, searchParams]);
-
-    useEffect(() => {
-        const fetchSections = async () => {
-            try {
-                const { data, error } = await supabase
-                    .from('section')
-                    .select('id, section_name');
-                if (error) {
-                    toast.error(`Failed to fetch sections: ${error.message}`);
-                    setSections([]);
-                } else if (data && data.length > 0) {
-                    setSections(data as Section[]);
-                    if (asset && asset.section) {
-                        setSelectedSection(asset.section);
-                    } else {
-                        setSelectedSection(data[0].section_name);
-                    }
-                } else {
-                    setSections([]);
-                }
-            } catch (err: any) {
-                toast.error(`Error fetching sections: ${err.message || 'Unknown error'}`);
-                setSections([]);
-            }
-        };
-
-        if (isModalOpen && sections.length === 0) {
-            fetchSections();
-        }
-    }, [isModalOpen, sections.length, asset]);
-
-    const handleSave = async () => {
-        if (!asset || !selectedSection) return;
-        setSaving(true);
-        try {
-            // 1. Perform the database update
-            await updateAssetSection(asset.id, selectedSection);
-            
-            // 2. CRITICAL: Force the local state to match the new DB value
-            setAsset(prev => prev ? { ...prev, section: selectedSection } : null);
-            
-            // 3. CRITICAL: Clear the local cache so the app is forced to fetch fresh data next time
-            localStorage.removeItem('cached_assets');
-            
-            toast.success("Section updated successfully!");
-            setIsModalOpen(false);
-        } catch (err: any) {
-            toast.error("Database update failed.");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <div className="p-4 md:p-8">Loading asset details...</div>;
-    if (!asset) return <div className="p-4 md:p-8">Asset not found</div>;
-
-    return (
-        <div className="p-4 md:p-8 max-w-4xl relative">
-            <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-text-primary">{asset.asset_name}</h1>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between">
-                    <div>
-                        <h3 className="font-bold text-text-primary mb-3">Identifiers</h3>
-                        <p className="text-text-secondary text-sm mb-1.5">S/N: <span className="text-text-primary font-mono">{asset.serial_number}</span></p>
-                        <p className="text-text-secondary text-sm">QR Code: <span className="text-text-primary font-mono">{asset.qr_code}</span></p>
-                    </div>
-                </div>
-                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between gap-4">
-                    <div>
-                        <h3 className="font-bold text-text-primary mb-3">Section Details</h3>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2 pb-2">
-                            <p className="text-text-secondary text-sm">Section: <span className="text-text-primary font-medium">{asset.section}</span></p>
-                            {!can_update_location ? (
-                                <button 
-                                    className="text-text-secondary/50 text-sm font-medium text-left cursor-not-allowed min-h-[32px] py-1 flex items-center gap-1.5" 
-                                    title="Permission denied"
-                                    disabled
-                                >
-                                    Change Section <span className="text-[10px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Blocked</span>
-                                </button>
-                            ) : (
-                                <button onClick={() => setIsModalOpen(true)} className="text-brand-gold text-sm font-medium hover:underline text-left cursor-pointer min-h-[32px] py-1">Change Section</button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                    <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl">
-                        <h2 className="text-lg font-bold mb-4">Update Machine Section</h2>
-                        <select 
-                            value={selectedSection} 
-                            onChange={(e) => setSelectedSection(e.target.value)}
-                            className="w-full p-2.5 min-h-[44px] border border-brand-border rounded-lg mb-4 bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm cursor-pointer font-medium"
-                        >
-                            {sections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
-                        </select>
-                        <div className="flex justify-end gap-2">
-                            <button onClick={() => setIsModalOpen(false)} className="px-4 py-2.5 min-h-[44px] text-text-secondary hover:bg-bg-base rounded-lg cursor-pointer text-sm">Cancel</button>
-                            <button onClick={handleSave} disabled={saving} className="bg-brand-gold text-white px-5 py-2.5 min-h-[44px] rounded-lg font-medium hover:bg-brand-gold/90 transition-colors flex items-center justify-center text-sm cursor-pointer min-w-[120px]">
-                                {saving ? 'Saving...' : 'Save Changes'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
 
 export function CustomerDetailsPage() {
     const { code } = useParams<{ code: string }>();
@@ -1597,14 +1447,24 @@ export function ScannerPage() {
               Would you like to update the section for this machine?
             </p>
             <div className="flex flex-col gap-2">
-              <button
-                onClick={() => {
-                  navigate(`/assets/${scannedMachine.id}?action=update_section`);
-                }}
-                className="w-full bg-brand-gold hover:bg-brand-gold/90 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors cursor-pointer min-h-[44px] flex items-center justify-center"
-              >
-                🔄 Update Section
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    navigate(`/assets/${scannedMachine.id}?action=update_section`);
+                  }}
+                  className="w-full bg-brand-gold hover:bg-brand-gold/90 text-white font-semibold py-2.5 px-2 rounded-lg transition-colors cursor-pointer min-h-[44px] flex items-center justify-center text-xs sm:text-sm"
+                >
+                  🔄 Update Section
+                </button>
+                <button
+                  onClick={() => {
+                    navigate(`/assets/${scannedMachine.id}?action=log_maintenance`);
+                  }}
+                  className="w-full bg-bg-base hover:bg-bg-base/85 text-text-primary border border-brand-border font-semibold py-2.5 px-2 rounded-lg transition-colors cursor-pointer min-h-[44px] flex items-center justify-center text-xs sm:text-sm shadow-sm"
+                >
+                  🛠️ Log Maintenance
+                </button>
+              </div>
               <button
                 onClick={() => {
                   navigate(`/assets/${scannedMachine.id}`);
