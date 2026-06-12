@@ -7,70 +7,7 @@ import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineMo
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
-const MOCK_SECTIONS: Section[] = [
-  { id: 'sec-1', section_name: 'Workshop A' },
-  { id: 'sec-2', section_name: 'Main Storage Room' },
-  { id: 'sec-3', section_name: 'Testing Bay 4' },
-  { id: 'sec-4', section_name: 'Dispatch Area' }
-];
 
-const MOCK_MACHINES: Machine[] = [
-  {
-    id: 'ast-1',
-    asset_name: 'Industrial CNC Miller',
-    serial_number: 'CNCM-9921A',
-    qr_code: 'QR-CNC-99',
-    section: 'Workshop A'
-  },
-  {
-    id: 'ast-2',
-    asset_name: 'Pneumatic Drill Unit',
-    serial_number: 'PDU-1029B',
-    qr_code: 'QR-PDU-10',
-    section: 'Workshop A'
-  },
-  {
-    id: 'ast-3',
-    asset_name: 'Hydraulic Lift Stage 2',
-    serial_number: 'HLS-5531X',
-    qr_code: 'QR-HLS-55',
-    section: 'Main Storage Room'
-  },
-  {
-    id: 'ast-4',
-    asset_name: 'Heavy Rotary Compressor',
-    serial_number: 'HRC-8321W',
-    qr_code: 'QR-HRC-83',
-    section: 'Testing Bay 4'
-  }
-];
-
-const MOCK_CUSTOMERS: Customer[] = [
-  {
-    id: 'cust-1',
-    'A/C Code': 'CUST-001',
-    'Customer Name': 'AeroParts Ltd',
-    'Telephone-1': '+27 11 555 1200',
-    'Email-1': 'support@aeroparts.co.za',
-    'Ship To': 'Plot 42, Aero Space Industrial Park, Johannesburg'
-  },
-  {
-    id: 'cust-2',
-    'A/C Code': 'CUST-002',
-    'Customer Name': 'MiningCorp',
-    'Telephone-1': '+27 14 888 3400',
-    'Email-1': 'logistics@miningcorp.co.za',
-    'Ship To': 'Shaft 3, Rustenburg Platinum Reef'
-  },
-  {
-    id: 'cust-3',
-    'A/C Code': 'CUST-003',
-    'Customer Name': 'Apex Logistics',
-    'Telephone-1': '+27 21 444 8900',
-    'Email-1': 'inbounds@apexlogistics.co.za',
-    'Ship To': 'Container Terminal B, Cape Town Port'
-  }
-];
 
 export function StockPage() {
   const [stockItems, setStockItems] = useState<any[]>([]);
@@ -80,7 +17,11 @@ export function StockPage() {
 
   // Form states
   const [formItem, setFormItem] = useState('');
-  const [formQty, setFormQty] = useState('');
+  const [formBarcode, setFormBarcode] = useState('');
+  const [formPalletQty, setFormPalletQty] = useState('');
+  const [formBoxesPerPallet, setFormBoxesPerPallet] = useState('48');
+  const [formBoxes, setFormBoxes] = useState('');
+  const [formUnitsPerBox, setFormUnitsPerBox] = useState('');
   const [formNotes, setFormNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -88,7 +29,11 @@ export function StockPage() {
 
   const resetForm = () => {
     setFormItem('');
-    setFormQty('');
+    setFormBarcode('');
+    setFormPalletQty('');
+    setFormBoxesPerPallet('48');
+    setFormBoxes('');
+    setFormUnitsPerBox('');
     setFormNotes('');
   };
 
@@ -103,9 +48,8 @@ export function StockPage() {
           .order('id', { ascending: false });
         
         if (!stockError && stockData) {
-          setStockItems(stockData);
+          setStockItems(stockData || []);
           setDetectedTable('stock');
-          setLoading(false);
           return;
         }
 
@@ -116,30 +60,19 @@ export function StockPage() {
           .order('id', { ascending: false });
 
         if (!invError && invData) {
-          setStockItems(invData);
+          setStockItems(invData || []);
           setDetectedTable('inventory');
-          setLoading(false);
           return;
         }
 
-        // 3. Fallback to localStorage
-        const localData = localStorage.getItem('local_stock');
-        if (localData) {
-          setStockItems(JSON.parse(localData));
-        } else {
-          const initialMock = [
-            { id: 1, item: 'Hydraulic Piston H2', sku: 'SKU-77291', quantity: 18, notes: 'Department B supply' },
-            { id: 2, item: 'Vibration Gasket', sku: 'SKU-10293', quantity: 120, notes: 'Main maintenance stores' },
-            { id: 3, item: 'Pressure Sensor P10', sku: 'SKU-88231', quantity: 45, notes: 'Replacement spares' },
-            { id: 4, item: 'Electric Motor 5kW', sku: 'SKU-54412', quantity: 3, notes: 'High-value reserve' }
-          ];
-          localStorage.setItem('local_stock', JSON.stringify(initialMock));
-          setStockItems(initialMock);
+        if (stockError || invError) {
+          toast.error(`Database Error: ${stockError?.message || invError?.message || "Failed to load stock"}`);
         }
-        setDetectedTable('local');
-      } catch (err) {
+        setStockItems([]);
+      } catch (err: any) {
         console.error('Error during stock auto-detection:', err);
-        setDetectedTable('local');
+        toast.error(`Error loading stock: ${err.message || 'Unknown error'}`);
+        setStockItems([]);
       } finally {
         setLoading(false);
       }
@@ -156,9 +89,20 @@ export function StockPage() {
     return item['SKU'] || item['sku'] || item['Serial#'] || `SKU-00${item.id || 1}`;
   };
 
+  const getCalculatedTotalUnits = (item: any) => {
+    if (item.pallet_quantity !== undefined || item.box_quantity !== undefined || item.units_per_box !== undefined) {
+      const pQty = Number(item.pallet_quantity || 0);
+      const bQty = Number(item.box_quantity || 0);
+      const uBox = Number(item.units_per_box || 0);
+      const calculated = (pQty * 48 * uBox) + (bQty * uBox);
+      if (calculated > 0) return calculated;
+    }
+    const legacyQty = item['Quantity'] || item['quantity'] || item['Quantity Received'] || item['quantity_received'];
+    return legacyQty !== undefined ? Number(legacyQty) : 0;
+  };
+
   const getQuantity = (item: any) => {
-    const q = item['Quantity'] || item['quantity'] || item['Quantity Received'] || item['quantity_received'];
-    return q !== undefined ? Number(q) : 0;
+    return getCalculatedTotalUnits(item);
   };
 
   const getNotes = (item: any) => {
@@ -167,13 +111,17 @@ export function StockPage() {
 
   const handleReceiveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formItem.trim() || !formQty) {
+    if (!formItem.trim() || !formBarcode.trim() || !formPalletQty || !formBoxes || !formUnitsPerBox) {
       toast.error("Please fill in all required fields.");
       return;
     }
 
     setSaving(true);
-    const qtyNum = parseInt(formQty, 10);
+    const palletQty = parseInt(formPalletQty, 10);
+    const boxesPerPallet = parseInt(formBoxesPerPallet || '48', 10);
+    const boxQty = parseInt(formBoxes, 10);
+    const unitsPerBox = parseInt(formUnitsPerBox, 10);
+    const calculatedTotalUnits = (palletQty * boxesPerPallet * unitsPerBox) + (boxQty * unitsPerBox);
     const generatedSku = `SKU-${Math.floor(10000 + Math.random() * 90000)}`;
 
     if (detectedTable !== 'local') {
@@ -205,9 +153,13 @@ export function StockPage() {
 
         const insertData = {
           [itemKey]: formItem,
-          [qtyKey]: qtyNum,
+          [qtyKey]: calculatedTotalUnits,
           [notesKey]: formNotes,
-          [skuKey]: generatedSku
+          [skuKey]: generatedSku,
+          barcode: formBarcode,
+          pallet_quantity: palletQty,
+          box_quantity: boxQty,
+          units_per_box: unitsPerBox
         };
 
         const { error } = await supabase
@@ -220,12 +172,16 @@ export function StockPage() {
             item: formItem,
             item_name: formItem,
             'Item Name': formItem,
-            quantity: qtyNum,
-            Quantity: qtyNum,
+            quantity: calculatedTotalUnits,
+            Quantity: calculatedTotalUnits,
             notes: formNotes,
             Notes: formNotes,
             sku: generatedSku,
-            SKU: generatedSku
+            SKU: generatedSku,
+            barcode: formBarcode,
+            pallet_quantity: palletQty,
+            box_quantity: boxQty,
+            units_per_box: unitsPerBox
           };
           const { error: fbErr } = await supabase
             .from(detectedTable === 'stock' ? 'stock' : 'inventory')
@@ -260,10 +216,14 @@ export function StockPage() {
         'Item Name': formItem,
         sku: generatedSku,
         SKU: generatedSku,
-        quantity: qtyNum,
-        Quantity: qtyNum,
+        quantity: calculatedTotalUnits,
+        Quantity: calculatedTotalUnits,
         notes: formNotes,
-        Notes: formNotes
+        Notes: formNotes,
+        barcode: formBarcode,
+        pallet_quantity: palletQty,
+        box_quantity: boxQty,
+        units_per_box: unitsPerBox
       };
       const updated = [newItem, ...stockItems];
       localStorage.setItem('local_stock', JSON.stringify(updated));
@@ -377,38 +337,48 @@ export function StockPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-brand-border text-text-secondary text-sm bg-bg-base/30">
-                  <th className="p-4 font-semibold">SKU Code</th>
-                  <th className="p-4 font-semibold">Item & Description</th>
-                  <th className="p-4 font-semibold">Status / Notes</th>
-                  <th className="p-4 font-semibold text-right">In Stock Qty</th>
+                  <th className="p-4 font-semibold">Barcode</th>
+                  <th className="p-4 font-semibold">Item Name</th>
+                  <th className="p-4 font-semibold">Pallets</th>
+                  <th className="p-4 font-semibold">Boxes</th>
+                  <th className="p-4 font-semibold">Units/Box</th>
+                  <th className="p-4 font-semibold text-right">Total Units</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredItems.map((item, index) => {
-                  const qty = getQuantity(item);
-                  const isLow = qty < 10;
+                  const barcodeValue = item.barcode || getSKU(item) || 'N/A';
+                  const itemNameValue = getItemName(item);
+                  const palletQtyValue = item.pallet_quantity !== undefined && item.pallet_quantity !== null ? item.pallet_quantity : 0;
+                  const boxQtyValue = item.box_quantity !== undefined && item.box_quantity !== null ? item.box_quantity : 0;
+                  const unitsPerBoxValue = item.units_per_box !== undefined && item.units_per_box !== null ? item.units_per_box : 0;
+                  const totalUnits = getCalculatedTotalUnits(item);
+                  const isLow = totalUnits < 10;
                   return (
                     <tr key={item.id || index} className="border-b border-brand-border hover:bg-bg-base/40 transition-colors">
-                      <td className="p-4 font-mono text-xs text-text-secondary">{getSKU(item)}</td>
+                      <td className="p-4 font-mono text-xs text-text-secondary">{barcodeValue}</td>
                       <td className="p-4">
-                        <div className="font-semibold text-text-primary text-sm">{getItemName(item)}</div>
+                        <div className="font-semibold text-text-primary text-sm">{itemNameValue}</div>
+                        {getNotes(item) && getNotes(item) !== 'No notes' && (
+                          <div className="text-xs text-text-secondary mt-0.5 line-clamp-1">{getNotes(item)}</div>
+                        )}
                       </td>
-                      <td className="p-4">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs text-text-secondary line-clamp-1">{getNotes(item)}</span>
+                      <td className="p-4 text-text-secondary text-sm">{palletQtyValue}</td>
+                      <td className="p-4 text-text-secondary text-sm">{boxQtyValue}</td>
+                      <td className="p-4 text-text-secondary text-sm">{unitsPerBoxValue}</td>
+                      <td className="p-4 text-right">
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold ${
+                            isLow ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'
+                          }`}>
+                            {totalUnits} units
+                          </span>
                           {isLow && (
-                            <span className="text-[10px] text-amber-500 font-medium inline-flex items-center gap-1 mt-0.5">
-                              ⚠️ Low Stock Warning
+                            <span className="text-[10px] text-amber-500 font-medium">
+                              ⚠️ Low Stock
                             </span>
                           )}
                         </div>
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold ${
-                          isLow ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'
-                        }`}>
-                          {qty} units
-                        </span>
                       </td>
                     </tr>
                   );
@@ -441,17 +411,87 @@ export function StockPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Quantity Received *</label>
-                <input 
-                  type="number" 
-                  required
-                  min="1"
-                  placeholder="e.g. 50"
-                  value={formQty} 
-                  onChange={(e) => setFormQty(e.target.value)}
-                  className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Barcode *</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="e.g. BAR-1234"
+                    value={formBarcode} 
+                    onChange={(e) => setFormBarcode(e.target.value)}
+                    className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Pallet Quantity *</label>
+                  <input 
+                    type="number" 
+                    required
+                    min="0"
+                    placeholder="e.g. 2"
+                    value={formPalletQty} 
+                    onChange={(e) => setFormPalletQty(e.target.value)}
+                    className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Boxes/Pallet *</label>
+                  <input 
+                    type="number" 
+                    required
+                    min="1"
+                    placeholder="48"
+                    value={formBoxesPerPallet} 
+                    onChange={(e) => setFormBoxesPerPallet(e.target.value)}
+                    className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Boxes (Loose) *</label>
+                  <input 
+                    type="number" 
+                    required
+                    min="0"
+                    placeholder="e.g. 5"
+                    value={formBoxes} 
+                    onChange={(e) => setFormBoxes(e.target.value)}
+                    className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">Units/Box *</label>
+                  <input 
+                    type="number" 
+                    required
+                    min="1"
+                    placeholder="e.g. 10"
+                    value={formUnitsPerBox} 
+                    onChange={(e) => setFormUnitsPerBox(e.target.value)}
+                    className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-bg-base/50 rounded-lg border border-brand-border">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-semibold text-text-secondary">Calculated Total Units</span>
+                  <span className="text-sm font-bold text-brand-gold">
+                    {(() => {
+                      const pQty = Number(formPalletQty || 0);
+                      const bPerPallet = Number(formBoxesPerPallet || 48);
+                      const bQty = Number(formBoxes || 0);
+                      const uBox = Number(formUnitsPerBox || 0);
+                      return (pQty * bPerPallet * uBox) + (bQty * uBox);
+                    })()} units
+                  </span>
+                </div>
               </div>
 
               <div>
@@ -628,28 +668,6 @@ export function AssetsPage() {
         navisionFaCode: addForm.navisionFaCode || null
       });
 
-      // Update local storage so mock / offline cache fallback mode is fully functional and immediate
-      const stored = localStorage.getItem('cached_assets');
-      let allAssets = MOCK_MACHINES;
-      if (stored) {
-        try {
-          allAssets = JSON.parse(stored);
-        } catch (e) {
-          console.warn("Error parsing cache:", e);
-        }
-      }
-
-      const newMachineObj: Machine = {
-        id: 'new-' + Date.now(),
-        asset_name: addForm.assetName,
-        serial_number: addForm.serialNo,
-        qr_code: addForm.qrCode,
-        section: addForm.section
-      };
-
-      allAssets.unshift(newMachineObj);
-      localStorage.setItem('cached_assets', JSON.stringify(allAssets));
-
       toast.success('Machine added to warehouse');
       handleCloseAddModal();
 
@@ -672,27 +690,14 @@ export function AssetsPage() {
           .order('section_name', { ascending: true });
         
         if (error) {
-          console.warn(`Failed to load sections: ${error.message}`);
-          loadFallbackSections();
-        } else if (data && data.length > 0) {
-          setSections(data as Section[]);
-          localStorage.setItem('cached_sections', JSON.stringify(data));
+          toast.error(`Failed to load sections: ${error.message}`);
+          setSections([]);
         } else {
-          loadFallbackSections();
+          setSections(data as Section[] || []);
         }
       } catch (err: any) {
-        console.warn('Error fetching sections:', err);
-        loadFallbackSections();
-      }
-    };
-
-    const loadFallbackSections = () => {
-      const stored = localStorage.getItem('cached_sections');
-      if (stored) {
-        setSections(JSON.parse(stored));
-      } else {
-        localStorage.setItem('cached_sections', JSON.stringify(MOCK_SECTIONS));
-        setSections(MOCK_SECTIONS);
+        toast.error(`Error fetching sections: ${err.message || 'Unknown error'}`);
+        setSections([]);
       }
     };
 
@@ -714,39 +719,16 @@ export function AssetsPage() {
 
         const { data, error } = await query;
         if (error) {
-          console.warn(`Failed to fetch assets: ${error.message}`);
-          loadFallbackAssets();
-        } else if (data && data.length > 0) {
-          if (selectedSection) {
-            setAssets(data as Machine[]);
-          } else {
-            setAssets(data as Machine[]);
-            localStorage.setItem('cached_assets', JSON.stringify(data));
-          }
+          toast.error(`Failed to fetch assets: ${error.message}`);
+          setAssets([]);
         } else {
-          loadFallbackAssets();
+          setAssets(data as Machine[] || []);
         }
       } catch (err: any) {
-        console.warn('Error fetching assets from Supabase:', err);
-        loadFallbackAssets();
+        toast.error(`Error fetching assets: ${err.message || 'Unknown error'}`);
+        setAssets([]);
       } finally {
         setLoading(false);
-      }
-    };
-
-    const loadFallbackAssets = () => {
-      const stored = localStorage.getItem('cached_assets');
-      let allAssets = MOCK_MACHINES;
-      if (stored) {
-        allAssets = JSON.parse(stored);
-      } else {
-        localStorage.setItem('cached_assets', JSON.stringify(MOCK_MACHINES));
-      }
-
-      if (selectedSection) {
-        setAssets(allAssets.filter(a => a.section === selectedSection));
-      } else {
-        setAssets(allAssets);
       }
     };
 
@@ -1155,36 +1137,21 @@ export function AssetDetailsPage() {
                     .eq('id', id)
                     .single();
                 if (error) {
-                    console.warn(`Failed to fetch asset details: ${error.message}`);
-                    loadFallbackAsset();
+                    toast.error(`Failed to fetch asset details: ${error.message}`);
+                    setAsset(null);
                 } else if (data) {
                     setAsset(data as Machine);
                     if (searchParams.get('action') === 'update_section' || searchParams.get('action') === 'update_location') {
                         setIsModalOpen(true);
                     }
                 } else {
-                    loadFallbackAsset();
+                    setAsset(null);
                 }
             } catch (err: any) {
-                console.warn('Error fetching asset details:', err);
-                loadFallbackAsset();
+                toast.error(`Error fetching asset details: ${err.message || 'Unknown error'}`);
+                setAsset(null);
             } finally {
                 setLoading(false);
-            }
-        };
-
-        const loadFallbackAsset = () => {
-            const stored = localStorage.getItem('cached_assets');
-            let allAssets = MOCK_MACHINES;
-            if (stored) {
-                allAssets = JSON.parse(stored);
-            }
-            const found = allAssets.find(a => a.id === id);
-            if (found) {
-                setAsset(found);
-                if (searchParams.get('action') === 'update_section' || searchParams.get('action') === 'update_location') {
-                    setIsModalOpen(true);
-                }
             }
         };
 
@@ -1200,8 +1167,8 @@ export function AssetDetailsPage() {
                     .from('section')
                     .select('id, section_name');
                 if (error) {
-                    console.warn(`Failed to fetch sections: ${error.message}`);
-                    loadFallbackSections();
+                    toast.error(`Failed to fetch sections: ${error.message}`);
+                    setSections([]);
                 } else if (data && data.length > 0) {
                     setSections(data as Section[]);
                     if (asset && asset.section) {
@@ -1210,25 +1177,11 @@ export function AssetDetailsPage() {
                         setSelectedSection(data[0].section_name);
                     }
                 } else {
-                    loadFallbackSections();
+                    setSections([]);
                 }
             } catch (err: any) {
-                console.warn('Error fetching sections:', err);
-                loadFallbackSections();
-            }
-        };
-
-        const loadFallbackSections = () => {
-            const stored = localStorage.getItem('cached_sections');
-            let secs = MOCK_SECTIONS;
-            if (stored) {
-                secs = JSON.parse(stored);
-            }
-            setSections(secs);
-            if (asset && asset.section) {
-                setSelectedSection(asset.section);
-            } else if (secs.length > 0) {
-                setSelectedSection(secs[0].section_name);
+                toast.error(`Error fetching sections: ${err.message || 'Unknown error'}`);
+                setSections([]);
             }
         };
 
@@ -1241,48 +1194,22 @@ export function AssetDetailsPage() {
         if (!asset || !selectedSection) return;
         setSaving(true);
         try {
+            // 1. Await the DB update
             await updateAssetSection(asset.id, selectedSection);
-            updateCachedAssetMemory();
+            
+            // 2. CRITICAL: Update the state directly and ensure it's not being overridden by cache
             setAsset(prev => prev ? { ...prev, section: selectedSection } : null);
+            
+            // 3. Clear local cache so the next refresh forces a fetch
+            localStorage.removeItem('cached_assets');
+            
             toast.success("Section updated successfully!");
             setIsModalOpen(false);
         } catch (err: any) {
-            console.warn('Update location exception:', err);
-            updateFallbackAsset();
-        } finally {
+            console.error('Update failed:', err);
+            toast.error("Update failed. Check your network or permissions.");
             setSaving(false);
         }
-    };
-
-    const updateCachedAssetMemory = () => {
-        const stored = localStorage.getItem('cached_assets');
-        if (stored) {
-            const all: Machine[] = JSON.parse(stored);
-            const idx = all.findIndex(a => a.id === asset.id);
-            if (idx !== -1) {
-                all[idx].section = selectedSection;
-                localStorage.setItem('cached_assets', JSON.stringify(all));
-            }
-        }
-    };
-
-    const updateFallbackAsset = () => {
-        const stored = localStorage.getItem('cached_assets');
-        let all: Machine[] = MOCK_MACHINES;
-        if (stored) {
-            all = JSON.parse(stored);
-        }
-        const idx = all.findIndex(a => a.id === asset.id);
-        if (idx !== -1) {
-            all[idx].section = selectedSection;
-        } else {
-            asset.section = selectedSection;
-            all.push(asset);
-        }
-        localStorage.setItem('cached_assets', JSON.stringify(all));
-        setAsset(prev => prev ? { ...prev, section: selectedSection } : null);
-        toast.success("Section updated (Local Demo Mode)");
-        setIsModalOpen(false);
     };
 
     if (loading) return <div className="p-4 md:p-8">Loading asset details...</div>;
@@ -1382,26 +1309,15 @@ export function CustomerDetailsPage() {
                 if (foundCustomer) {
                     setCustomer(foundCustomer as Customer);
                 } else {
-                    loadFallbackCustomer();
+                    toast.error(`Customer details not found for A/C Code: ${code}`);
+                    setCustomer(null);
                 }
             } catch (err: any) {
-                console.warn('Error loading customer details:', err);
-                loadFallbackCustomer();
+                toast.error(`Error loading customer details: ${err.message || err}`);
+                setCustomer(null);
             } finally {
                 setLoading(false);
             }
-        };
-
-        const loadFallbackCustomer = () => {
-            const stored = localStorage.getItem('cached_customers');
-            let custs = MOCK_CUSTOMERS;
-            if (stored) {
-                custs = JSON.parse(stored);
-            } else {
-                localStorage.setItem('cached_customers', JSON.stringify(MOCK_CUSTOMERS));
-            }
-            const found = custs.find(c => c['A/C Code'] === code);
-            setCustomer(found || null);
         };
 
         fetchCustomer();
@@ -1501,26 +1417,9 @@ export function ScannerPage() {
               setScannedMachine(foundMachine);
             }
           } else {
-            // Check cache & mock
-            const stored = localStorage.getItem('cached_assets');
-            let all = MOCK_MACHINES;
-            if (stored) {
-              try {
-                all = JSON.parse(stored);
-              } catch (_) {}
-            }
-            const found = all.find(a => a.qr_code === decodedText);
-
-            if (found) {
-              toast.success("Asset found (Local Cache)!");
-              if (isMounted) {
-                setScannedMachine(found);
-              }
-            } else {
-              // Show unrecognized modal instead of auto-resuming
-              if (isMounted) {
-                setUnrecognizedQr(decodedText);
-              }
+            // Show unrecognized modal instead of auto-resuming
+            if (isMounted) {
+              setUnrecognizedQr(decodedText);
             }
           }
         } catch (err: any) {

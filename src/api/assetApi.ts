@@ -22,15 +22,28 @@ export const getSections = async () => {
 };
 
 export const updateAssetSection = async (id: string, newSectionName: string) => {
-  const { data, error } = await supabase
-    .from('machines')
-    .update({ section: newSectionName })
-    .eq('id', id)
-    .select()
-    .single();
-    
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase
+      .from('machines')
+      .update({ section: newSectionName })
+      .eq('id', id)
+      .select()
+      .single();
+      
+    if (error) {
+      console.error("Supabase Error updating machine section (check Row Level Security / RLS policies or constraints):", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      throw error;
+    }
+    return data;
+  } catch (error: any) {
+    console.error("Failed to execute updateAssetSection due to an implementation/network exception:", error);
+    throw error;
+  }
 };
 
 export interface ComprehensiveMachineData {
