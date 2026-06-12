@@ -9,22 +9,29 @@ import {
   Moon,
   LogOut,
   User as UserIcon,
-  BarChart3
+  BarChart3,
+  ClipboardList
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'sonner';
 
 export default function Sidebar() {
-  const { user, logout } = useAuth();
+  const { user, logout, role } = useAuth();
   const navigate = useNavigate();
-  const navItems = [
-    { name: 'Stock', path: '/stock', icon: Package },
-    { name: 'Assets', path: '/assets', icon: Database },
-    { name: 'Scanner', path: '/scanner', icon: QrCode },
-    { name: 'Analytics', path: '/analytics', icon: BarChart3 },
-    { name: 'Settings', path: '/settings', icon: Settings },
+
+  const userRole = role || 'user';
+
+  const allNavItems = [
+    { name: 'Stock', path: '/stock', icon: Package, roles: ['admin', 'ops_manager', 'warehouse'] },
+    { name: 'Orders', path: '/orders', icon: ClipboardList, roles: ['admin', 'ops_manager', 'warehouse'] },
+    { name: 'Assets', path: '/assets', icon: Database, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'user'] },
+    { name: 'Scanner', path: '/scanner', icon: QrCode, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'user'] },
+    { name: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['admin', 'ops_manager'] },
+    { name: 'Settings', path: '/settings', icon: Settings, roles: ['admin', 'ops_manager'] },
   ];
+
+  const navItems = allNavItems.filter(item => item.roles.includes(userRole));
 
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -90,7 +97,7 @@ export default function Sidebar() {
           </div>
           <div className="overflow-hidden">
             <p className="text-sm font-medium text-text-primary truncate">{user?.email || 'User'}</p>
-            <p className="text-xs text-text-secondary">Standard User</p>
+            <p className="text-xs text-text-secondary uppercase font-semibold font-mono tracking-wider">{role || 'Standard User'}</p>
           </div>
         </div>
         

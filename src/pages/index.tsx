@@ -3,17 +3,25 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Machine, Customer, Section } from '../types';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { toast } from 'sonner';
-import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineModels, getNextFADocSequence, getStockByBarcode } from '../api/assetApi';
+import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineModels, getNextFADocSequence, getStockByBarcode, deductStockQuantity } from '../api/assetApi';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
 export { AnalyticsPage } from './AnalyticsPage';
 export { AssetDetailsPage } from './AssetDetailsPage';
+export { OrdersPage } from './OrdersPage';
 
 export function StockPage() {
+  const { role } = useAuth();
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
+  const [dispatchItem, setDispatchItem] = useState<any>(null);
+  const [dispatchPallets, setDispatchPallets] = useState('');
+  const [dispatchBoxes, setDispatchBoxes] = useState('');
+  const [dispatchUnits, setDispatchUnits] = useState('');
+  const [dispatching, setDispatching] = useState(false);
   const [detectedTable, setDetectedTable] = useState<'stock' | 'inventory' | 'local'>('local');
 
   // Form states
@@ -115,23 +123,15 @@ export function StockPage() {
   }, []);
 
   const getItemName = (item: any) => {
-    return item['Item Name'] || item['item_name'] || item['item'] || item['Item'] || item['name'] || 'Unnamed Item';
+    return item.item_name || 'Unnamed Item';
   };
 
   const getSKU = (item: any) => {
-    return item['SKU'] || item['sku'] || item['Serial#'] || `SKU-00${item.id || 1}`;
+    return item.sku || `SKU-00${item.id || 1}`;
   };
 
   const getCalculatedTotalUnits = (item: any) => {
-    if (item.pallet_quantity !== undefined || item.box_quantity !== undefined || item.units_per_box !== undefined) {
-      const pQty = Number(item.pallet_quantity || 0);
-      const bQty = Number(item.box_quantity || 0);
-      const uBox = Number(item.units_per_box || 0);
-      const calculated = (pQty * 48 * uBox) + (bQty * uBox);
-      if (calculated > 0) return calculated;
-    }
-    const legacyQty = item['Quantity'] || item['quantity'] || item['Quantity Received'] || item['quantity_received'];
-    return legacyQty !== undefined ? Number(legacyQty) : 0;
+    return Number(item.quantity) || 0;
   };
 
   const getQuantity = (item: any) => {
@@ -139,7 +139,7 @@ export function StockPage() {
   };
 
   const getNotes = (item: any) => {
-    return item['Notes'] || item['notes'] || 'No notes';
+    return item.notes || 'No notes';
   };
 
   const handleReceiveSubmit = async (e: React.FormEvent) => {
@@ -159,36 +159,11 @@ export function StockPage() {
 
     if (detectedTable !== 'local') {
       try {
-        let itemKey = 'item';
-        let qtyKey = 'quantity';
-        let notesKey = 'notes';
-        let skuKey = 'sku';
-
-        if (stockItems.length > 0) {
-          const firstKeys = Object.keys(stockItems[0]);
-          const foundItemKey = firstKeys.find(k => k.toLowerCase() === 'item' || k.toLowerCase() === 'item name' || k.toLowerCase() === 'item_name');
-          if (foundItemKey) itemKey = foundItemKey;
-
-          const foundQtyKey = firstKeys.find(k => k.toLowerCase() === 'quantity' || k.toLowerCase() === 'quantity received' || k.toLowerCase() === 'quantity_received' || k.toLowerCase() === 'qty');
-          if (foundQtyKey) qtyKey = foundQtyKey;
-
-          const foundNotesKey = firstKeys.find(k => k.toLowerCase() === 'notes' || k.toLowerCase() === 'note' || k.toLowerCase() === 'description');
-          if (foundNotesKey) notesKey = foundNotesKey;
-
-          const foundSkuKey = firstKeys.find(k => k.toLowerCase() === 'sku' || k.toLowerCase() === 'item code' || k.toLowerCase() === 'sku_code');
-          if (foundSkuKey) skuKey = foundSkuKey;
-        } else {
-          itemKey = 'item_name';
-          qtyKey = 'quantity';
-          notesKey = 'notes';
-          skuKey = 'sku';
-        }
-
         const insertData = {
-          [itemKey]: formItem,
-          [qtyKey]: calculatedTotalUnits,
-          [notesKey]: formNotes,
-          [skuKey]: generatedSku,
+          item_name: formItem,
+          quantity: calculatedTotalUnits,
+          notes: formNotes,
+          sku: generatedSku,
           barcode: formBarcode,
           pallet_quantity: palletQty,
           box_quantity: boxQty,
@@ -199,30 +174,8 @@ export function StockPage() {
           .from(detectedTable === 'stock' ? 'stock' : 'inventory')
           .insert([insertData]);
 
-        if (error) {
-          // Try inserting standard fallback object if customized key matching failed
-          const fallbackInsert = {
-            item: formItem,
-            item_name: formItem,
-            'Item Name': formItem,
-            quantity: calculatedTotalUnits,
-            Quantity: calculatedTotalUnits,
-            notes: formNotes,
-            Notes: formNotes,
-            sku: generatedSku,
-            SKU: generatedSku,
-            barcode: formBarcode,
-            pallet_quantity: palletQty,
-            box_quantity: boxQty,
-            units_per_box: unitsPerBox
-          };
-          const { error: fbErr } = await supabase
-            .from(detectedTable === 'stock' ? 'stock' : 'inventory')
-            .insert([fallbackInsert]);
-          
-          if (fbErr) throw fbErr;
-        }
-
+        if (error) throw error;
+        
         toast.success("Stock received successfully!");
         setIsModalOpen(false);
         resetForm();
@@ -241,18 +194,13 @@ export function StockPage() {
         setSaving(false);
       }
     } else {
-      const newId = stockItems.length > 0 ? Math.max(...stockItems.map(i => i.id)) + 1 : 1;
+      const newId = stockItems.length > 0 ? Math.max(...stockItems.map(i => Number(i.id))) + 1 : 1;
       const newItem = {
         id: newId,
-        item: formItem,
         item_name: formItem,
-        'Item Name': formItem,
         sku: generatedSku,
-        SKU: generatedSku,
         quantity: calculatedTotalUnits,
-        Quantity: calculatedTotalUnits,
         notes: formNotes,
-        Notes: formNotes,
         barcode: formBarcode,
         pallet_quantity: palletQty,
         box_quantity: boxQty,
@@ -265,6 +213,40 @@ export function StockPage() {
       setIsModalOpen(false);
       resetForm();
       setSaving(false);
+    }
+  };
+
+  const handleDispatchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dispatchItem || !dispatchItem.barcode) return;
+    
+    const palletsToDispatch = Number(dispatchPallets || 0);
+    const boxesToDispatch = Number(dispatchBoxes || 0);
+    const unitsToDispatch = Number(dispatchUnits || 0);
+
+    setDispatching(true);
+    try {
+        await deductStockQuantity(dispatchItem.barcode, palletsToDispatch, boxesToDispatch, unitsToDispatch);
+        toast.success("Stock dispatched successfully!");
+        
+        // Refresh
+        const { data: refreshed } = await supabase
+          .from(detectedTable === 'stock' ? 'stock' : 'inventory')
+          .select('*')
+          .order('id', { ascending: false });
+        if (refreshed) {
+          setStockItems(refreshed);
+        }
+        
+        setIsDispatchModalOpen(false);
+        setDispatchItem(null);
+        setDispatchPallets('');
+        setDispatchBoxes('');
+        setDispatchUnits('');
+    } catch (err: any) {
+        toast.error(err.message || "Error dispatching stock");
+    } finally {
+        setDispatching(false);
     }
   };
 
@@ -308,6 +290,20 @@ export function StockPage() {
         </div>
       </div>
 
+      {/* Low Stock Alerts Panel */}
+      {filteredItems.filter(item => getCalculatedTotalUnits(item) < 100).length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6">
+          <h3 className="text-amber-500 font-bold text-sm mb-2 flex items-center gap-2">⚠️ Low Stock Alerts ({filteredItems.filter(item => getCalculatedTotalUnits(item) < 100).length} SKUs)</h3>
+          <div className="flex flex-wrap gap-2">
+            {filteredItems.filter(item => getCalculatedTotalUnits(item) < 100).map(item => (
+              <span key={item.id} className="text-xs bg-amber-500/20 text-text-primary px-2 py-1 rounded">
+                {getItemName(item)} ({getCalculatedTotalUnits(item)} units)
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="bg-bg-elevated p-12 rounded-xl border border-brand-border text-center text-text-secondary">
           <div className="w-8 h-8 border-4 border-brand-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -328,7 +324,7 @@ export function StockPage() {
           <div className="block md:hidden space-y-4">
             {filteredItems.map((item, index) => {
               const qty = getQuantity(item);
-              const isLow = qty < 10;
+              const isLow = qty < 100;
               return (
                 <div 
                   key={item.id || index} 
@@ -376,6 +372,7 @@ export function StockPage() {
                   <th className="p-4 font-semibold">Boxes</th>
                   <th className="p-4 font-semibold">Units/Box</th>
                   <th className="p-4 font-semibold text-right">Total Units</th>
+                  <th className="p-4 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -386,7 +383,7 @@ export function StockPage() {
                   const boxQtyValue = item.box_quantity !== undefined && item.box_quantity !== null ? item.box_quantity : 0;
                   const unitsPerBoxValue = item.units_per_box !== undefined && item.units_per_box !== null ? item.units_per_box : 0;
                   const totalUnits = getCalculatedTotalUnits(item);
-                  const isLow = totalUnits < 10;
+                  const isLow = totalUnits < 100;
                   return (
                     <tr key={item.id || index} className="border-b border-brand-border hover:bg-bg-base/40 transition-colors">
                       <td className="p-4 font-mono text-xs text-text-secondary">{barcodeValue}</td>
@@ -413,6 +410,9 @@ export function StockPage() {
                           )}
                         </div>
                       </td>
+                      <td className="p-4 text-right">
+                        <button onClick={() => { setDispatchItem(item); setIsDispatchModalOpen(true); }} className="bg-brand-gold hover:bg-brand-gold/90 text-white text-xs px-2.5 py-1.5 rounded cursor-pointer">Dispatch</button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -420,6 +420,70 @@ export function StockPage() {
             </table>
           </div>
         </>
+      )}
+
+      {/* Dispatch Stock Modal */}
+      {isDispatchModalOpen && dispatchItem && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <header className="mb-4">
+              <h2 className="text-lg font-bold text-text-primary">Dispatch Stock: {getItemName(dispatchItem)}</h2>
+            </header>
+            
+            <form onSubmit={handleDispatchSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Pallets to Deduct</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  max={dispatchItem.pallet_quantity}
+                  value={dispatchPallets} 
+                  onChange={(e) => setDispatchPallets(e.target.value)}
+                  className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Boxes to Deduct</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  max={dispatchItem.box_quantity}
+                  value={dispatchBoxes} 
+                  onChange={(e) => setDispatchBoxes(e.target.value)}
+                  className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Units (Loose) to Deduct</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  value={dispatchUnits} 
+                  onChange={(e) => setDispatchUnits(e.target.value)}
+                  className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm"
+                />
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2 border-t border-brand-border">
+                <button 
+                  type="button"
+                  onClick={() => setIsDispatchModalOpen(false)} 
+                  className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-base rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={dispatching} 
+                  className="bg-brand-gold text-white px-5 py-2 rounded-lg font-medium text-sm hover:bg-brand-gold/90 transition-colors flex items-center justify-center min-w-[100px] cursor-pointer"
+                >
+                  {dispatching ? 'Saving...' : 'Dispatch'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Receive Stock Modal */}
@@ -1249,7 +1313,7 @@ export function ScannerPage() {
 
   useEffect(() => {
     let isMounted = true;
-    const html5QrCode = new Html5Qrcode("reader");
+    const html5QrCode = new Html5Qrcode("reader", false);
     scannerRef.current = html5QrCode;
     let isScanning = false;
 
@@ -1352,7 +1416,11 @@ export function ScannerPage() {
         }
       },
       (errorMessage) => {
-        // Debug output or passive scanner feedback
+        // Suppress expected "NotFoundException" errors from continuous scanning
+        if (errorMessage.includes("NotFoundException") || errorMessage.includes("No MultiFormat Readers")) {
+          return;
+        }
+        console.warn("Scanner error:", errorMessage);
       }
     ).then(() => {
       isScanning = true;
@@ -1551,7 +1619,7 @@ export function SettingsPage() {
   };
 
   const fetchUsers = async () => {
-    if (currentUserRole !== 'admin') return;
+    if (currentUserRole !== 'admin' && currentUserRole !== 'ops_manager') return;
     setLoadingUsers(true);
     try {
       const { data, error } = await supabase
@@ -1592,12 +1660,16 @@ export function SettingsPage() {
   };
 
   useEffect(() => {
-    if (currentUserRole === 'admin') {
+    if (currentUserRole === 'admin' || currentUserRole === 'ops_manager') {
       fetchUsers();
     }
   }, [currentUserRole]);
 
   const togglePermission = async (userId: string, currentVal: boolean) => {
+    if (currentUserRole !== 'admin') {
+      toast.error("Operations Managers can view but not edit system permissions.");
+      return;
+    }
     const newVal = !currentVal;
     // Optimistic UI update
     setUsersList(prev => prev.map(u => u.id === userId ? { ...u, can_update_location: newVal } : u));
@@ -1722,12 +1794,14 @@ export function SettingsPage() {
 
         {/* Right Column - Admin / Permissions Section */}
         <div className="lg:col-span-2">
-          {currentUserRole === 'admin' ? (
+          {currentUserRole === 'admin' || currentUserRole === 'ops_manager' ? (
             <section className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm h-full">
               <div className="mb-4 pb-2 border-b border-brand-border/40 flex justify-between items-center">
                 <div>
                   <h2 className="text-lg font-bold text-text-primary">Permissions Management</h2>
-                  <p className="text-xs text-text-secondary">Set application access rights for your team.</p>
+                  <p className="text-xs text-text-secondary">
+                    {currentUserRole === 'ops_manager' ? 'Read-only view of team permissions.' : 'Set application access rights for your team.'}
+                  </p>
                 </div>
                 <button 
                   onClick={fetchUsers}
@@ -1766,7 +1840,7 @@ export function SettingsPage() {
                           </td>
                           <td className="py-3 text-xs">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                              usr.role === 'admin' ? 'bg-brand-gold/10 text-brand-gold' : 'bg-text-secondary/10 text-text-secondary'
+                              usr.role === 'admin' ? 'bg-brand-gold/10 text-brand-gold' : usr.role === 'ops_manager' ? 'bg-indigo-500/10 text-indigo-400' : 'bg-text-secondary/10 text-text-secondary'
                             }`}>
                               {usr.role || 'user'}
                             </span>
@@ -1782,10 +1856,12 @@ export function SettingsPage() {
                               {/* Toggle switch */}
                               <button
                                 onClick={() => togglePermission(usr.id, usr.can_update_location !== false)}
-                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                disabled={currentUserRole !== 'admin'}
+                                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                                   usr.can_update_location !== false ? 'bg-emerald-500' : 'bg-brand-border'
-                                }`}
+                                } ${currentUserRole !== 'admin' ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                                 aria-label="Toggle Section Update Permission"
+                                title={currentUserRole !== 'admin' ? "Operations Managers can view but not edit system permissions." : ""}
                               >
                                 <span
                                   className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${

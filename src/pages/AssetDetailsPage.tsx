@@ -4,7 +4,9 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Machine, Section } from '../types';
 import { updateAssetSection } from '../api/assetApi';
+import { createMaintenanceTicket, closeMaintenanceTicket } from '../api/maintenance';
 import { toast } from 'sonner';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { 
   Shield, 
   Wrench, 
@@ -18,477 +20,373 @@ import {
   Plus, 
   CheckCircle2, 
   AlertCircle,
-  Truck
+  Truck,
+  Camera
 } from 'lucide-react';
 
 export function AssetDetailsPage() {
     const { id } = useParams<{ id: string }>();
-    const { can_update_location } = useAuth();
-    const navigate = useNavigate();
-    const [asset, setAsset] = useState<any | null>(null);
+    const { can_update_location, role } = useAuth(); // Extract role and permissions
+    const [asset, setAsset] = useState<Machine | null>(null);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    
+    // Ticket handling states
+    const [tickets, setTickets] = useState<any[]>([]);
+    const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+    const [newTicketIssue, setNewTicketIssue] = useState('');
+    const [submittingTicket, setSubmittingTicket] = useState(false);
+
+    // Ticket resolution state
+    const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
+    const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+    const [resolutionNotes, setResolutionNotes] = useState('');
+    const [submittingResolution, setSubmittingResolution] = useState(false);
+    const [qrVerified, setQrVerified] = useState(false);
+    const [scannedQr, setScannedQr] = useState<string | null>(null);
+    const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+    const [isScanning, setIsScanning] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    
     const [sections, setSections] = useState<Section[]>([]);
     const [selectedSection, setSelectedSection] = useState('');
     const [saving, setSaving] = useState(false);
     const [searchParams] = useSearchParams();
 
-    // Maintenance Tickets State
-    const [tickets, setTickets] = useState<any[]>([]);
-    const [loadingTickets, setLoadingTickets] = useState(false);
-    const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
-    const [ticketIssue, setTicketIssue] = useState('');
-    const [submittingTicket, setSubmittingTicket] = useState(false);
-
-    // Fetch Maintenance Tickets
-    const fetchMaintenanceTickets = async () => {
+    const fetchTickets = async () => {
         if (!id) return;
-        setLoadingTickets(true);
         try {
-            const { data, error } = await supabase
+            const { data: ticketData } = await supabase
                 .from('maintenance_tickets')
                 .select('*')
                 .eq('machine_id', id)
                 .order('created_at', { ascending: false });
-                
-            if (error) {
-                console.error("Error fetching tickets:", error);
-                setTickets([]);
-            } else if (data) {
-                setTickets(data);
-            }
+            setTickets(ticketData || []);
         } catch (err: any) {
-            console.error("Exception fetching tickets:", err);
-            setTickets([]);
-        } finally {
-            setLoadingTickets(false);
+            console.error("Failed to fetch tickets", err);
         }
     };
 
     useEffect(() => {
-        const fetchAssetDetails = async () => {
+        const fetchAssetData = async () => {
+            if (!id) return;
+            setLoading(true);
             try {
-                // First attempt direct lookup inside the 'fam' table using id
-                const { data: famData, error: famError } = await supabase
-                    .from('fam')
+                const { data: machineData, error: machErr } = await supabase
+                    .from('machines')
                     .select('*')
                     .eq('id', id)
                     .maybeSingle();
+                
+                if (machErr) throw machErr;
+                setAsset(machineData as Machine);
 
-                let resolvedFamRecord = famData;
+                await fetchTickets();
 
-                // Resilient fallback logic if FAM record is not found directly by integer id (e.g., if clicked machine has a different machine table integer id)
-                if (!resolvedFamRecord && id) {
-                    const { data: machData } = await supabase
-                        .from('machines')
-                        .select('qr_code, serial_number')
-                        .eq('id', id)
-                        .maybeSingle();
-
-                    if (machData) {
-                        const qr = machData.qr_code;
-                        const sn = machData.serial_number;
-                        
-                        if (qr || sn) {
-                            const clauses = [];
-                            if (qr) clauses.push(`"QR Code".eq.${qr}`);
-                            if (sn) clauses.push(`"Serial#".eq.${sn}`);
-                            
-                            const { data: backupFamData } = await supabase
-                                .from('fam')
-                                .select('*')
-                                .or(clauses.join(','))
-                                .maybeSingle();
-                                
-                            if (backupFamData) {
-                                resolvedFamRecord = backupFamData;
-                            }
-                        }
-                    }
-                }
-
-                if (resolvedFamRecord) {
-                    setAsset(resolvedFamRecord);
-                    if (searchParams.get('action') === 'update_section' || searchParams.get('action') === 'update_location') {
-                        setIsModalOpen(true);
-                    }
-                    if (searchParams.get('action') === 'log_maintenance') {
-                        setIsTicketModalOpen(true);
-                    }
-                } else {
-                    // Try one last direct maybeSingle fallback to prevent empty state
-                    const { data: directFam } = await supabase
-                        .from('fam')
-                        .select('*')
-                        .eq('id', id)
-                        .maybeSingle();
-                    if (directFam) {
-                        setAsset(directFam);
-                    } else {
-                        throw new Error(famError?.message || "Asset record could not be found in the Fixed Asset Management registry.");
-                    }
-                }
+                const action = searchParams.get('action');
+                if (action === 'update_section') setIsModalOpen(true);
+                if (action === 'log_maintenance') setIsTicketModalOpen(true);
             } catch (err: any) {
-                toast.error(`Error fetching asset details: ${err.message || 'Unknown error'}`);
-                setAsset(null);
+                toast.error("Error loading asset details: " + err.message);
             } finally {
                 setLoading(false);
             }
         };
-
-        if (id) {
-            fetchAssetDetails();
-            fetchMaintenanceTickets();
-        }
+        fetchAssetData();
     }, [id, searchParams]);
 
-    useEffect(() => {
-        const fetchSections = async () => {
-            try {
-                const { data, error } = await supabase
-                    .from('section')
-                    .select('id, section_name');
-                if (error) {
-                    toast.error(`Failed to fetch sections: ${error.message}`);
-                    setSections([]);
-                } else if (data && data.length > 0) {
-                    setSections(data as Section[]);
-                    if (asset && asset["Current Location"]) {
-                        setSelectedSection(asset["Current Location"]);
-                    } else if (asset && asset.section) {
-                        setSelectedSection(asset.section);
-                    } else {
-                        setSelectedSection(data[0].section_name);
-                    }
-                } else {
-                    setSections([]);
-                }
-            } catch (err: any) {
-                toast.error(`Error fetching sections: ${err.message || 'Unknown error'}`);
-                setSections([]);
-            }
-        };
+    // Create ticket submission handler (Admins & Ops Managers)
+    const handleSubmitTicket = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!id || !newTicketIssue.trim()) return;
+      setSubmittingTicket(true);
+      try {
+        await createMaintenanceTicket(id, newTicketIssue);
+        toast.success("Maintenance ticket created successfully");
+        setNewTicketIssue('');
+        setIsTicketModalOpen(false);
+        await fetchTickets();
+      } catch (err: any) {
+        toast.error("Failed to create ticket: " + err.message);
+      } finally {
+        setSubmittingTicket(false);
+      }
+    };
 
-        if (isModalOpen && sections.length === 0) {
-            fetchSections();
+    // Close ticket handler (Technicians / Techs)
+    const handleResolveTicket = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedTicketId || !resolutionNotes.trim() || !qrVerified || !photoUrl) return;
+        setSubmittingResolution(true);
+        try {
+            await closeMaintenanceTicket(selectedTicketId, resolutionNotes, photoUrl);
+            toast.success("Service ticket resolved/closed successfully");
+            setResolutionNotes('');
+            setPhotoUrl(null);
+            setQrVerified(false);
+            setScannedQr(null);
+            setSelectedTicketId(null);
+            setIsResolveModalOpen(false);
+            await fetchTickets();
+        } catch (err: any) {
+            toast.error("Failed to close ticket: " + err.message);
+        } finally {
+            setSubmittingResolution(false);
         }
-    }, [isModalOpen, sections.length, asset]);
+    };
+
+    const fetchSections = async () => {
+        try {
+            const { data, error } = await supabase.from('section').select('id, section_name');
+            if (error) throw error;
+            setSections(data as Section[] || []);
+            if (asset && asset.section) setSelectedSection(asset.section);
+            else if (data && data.length > 0) setSelectedSection(data[0].section_name);
+        } catch (err: any) {
+            toast.error("Could not load sections: " + err.message);
+        }
+    };
 
     const handleSave = async () => {
         if (!asset || !selectedSection) return;
         setSaving(true);
         try {
-            // 1. Perform the database update
             await updateAssetSection(asset.id, selectedSection);
-            
-            // 2. Force the local state to match the new DB value
-            setAsset(prev => prev ? { 
-                ...prev, 
-                "Current Location": selectedSection,
-                section: selectedSection 
-            } : null);
-            
-            // 3. Clear the local cache so the app is forced to fetch fresh data next time
+            setAsset(prev => prev ? { ...prev, section: selectedSection } : null);
             localStorage.removeItem('cached_assets');
-            
             toast.success("Section updated successfully!");
             setIsModalOpen(false);
         } catch (err: any) {
-            toast.error("Database update failed.");
+            toast.error("Database section update failed.");
         } finally {
             setSaving(false);
         }
     };
 
-    const handleAddTicket = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!id || !ticketIssue.trim()) {
-            toast.error("Please enter issue details");
-            return;
-        }
-        setSubmittingTicket(true);
-        try {
-            const { error } = await supabase
-                .from('maintenance_tickets')
-                .insert([
-                    {
-                        machine_id: id,
-                        issue_description: ticketIssue.trim()
-                    }
-                ]);
-            if (error) {
-                toast.error(`Error logging ticket: ${error.message}`);
-                throw error;
-            } else {
-                toast.success("Maintenance ticket logged successfully!");
-                setTicketIssue('');
-                setIsTicketModalOpen(false);
-                navigate(`/assets/${id}`, { replace: true });
-                await fetchMaintenanceTickets();
-            }
-        } catch (err: any) {
-            toast.error(`Error: ${err.message || "Failed to log ticket"}`);
-        } finally {
-            setSubmittingTicket(false);
-        }
-    };
+    if (loading) return <div className="p-4 md:p-8 animate-fade-in text-text-primary">Loading asset details...</div>;
+    if (!asset) return <div className="p-4 md:p-8 text-text-primary">Asset not found</div>;
 
-    if (loading) {
-        return (
-            <div className="p-8 text-center text-text-secondary flex flex-col items-center justify-center min-h-[400px] gap-2">
-                <div className="w-10 h-10 border-4 border-brand-gold border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-sm font-semibold text-text-secondary mt-2">Loading asset tracking dossier...</p>
-            </div>
-        );
-    }
-    
-    if (!asset) {
-        return (
-            <div className="p-8 text-center text-text-secondary max-w-lg mx-auto mt-12 bg-bg-elevated border border-brand-border rounded-xl">
-                <AlertCircle className="mx-auto text-red-500 mb-4" size={40} />
-                <h2 className="text-lg font-bold text-text-primary mb-2">Asset Not Found</h2>
-                <p className="text-sm text-text-secondary mb-6">The database ledger does not contain any machine records matching this specific control key.</p>
-                <Link to="/assets" className="inline-flex items-center gap-2 text-brand-gold font-semibold hover:underline text-sm">
-                    <ChevronLeft size={16} /> Return to Fleet List
-                </Link>
-            </div>
-        );
-    }
-
-    // Determine operational status
-    // Standard system columns might provide status, otherwise default to 'Active' or 'Maintenance' if tickets are open
-    const statusValue = asset.status || (tickets.length > 0 ? 'Maintenance' : 'Active');
-    
-    // Format creation timestamp
-    const systemLogDateStr = asset["Created TS"] 
-        ? new Date(asset["Created TS"]).toLocaleString() 
-        : asset.created_at
-        ? new Date(asset.created_at).toLocaleString()
-        : new Date().toLocaleString();
-
-    // Specific FAM field mappings with graceful defaults
-    const assetName = asset["Asset Name"] || "N/A";
-    const serialNumber = asset["Serial#"] || "N/A";
-    const qrCode = asset["QR Code"] || "N/A";
-    const customer = asset["Current Customer Name"] || "N/A";
-    const contractNo = asset["Contract#"] || "N/A";
-    const costPrice = asset["Cost Amount"] !== null && asset["Cost Amount"] !== undefined ? asset["Cost Amount"] : "N/A";
-    const currentLocation = asset["Current Location"] || asset.section || "N/A";
-
-    const formatCurrency = (value: any) => {
-        if (value === null || value === undefined || value === '' || value === 'N/A') return 'N/A';
-        const num = Number(value);
-        if (isNaN(num)) return value;
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
-    };
-
-    // Render operational status badge helper
-    const renderStatusBadge = (status: string) => {
-        const norm = status.toLowerCase();
-        if (norm === 'active' || norm === 'online') {
-            return (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-green-500/10 text-green-500 border border-green-500/20 uppercase tracking-wider">
-                    <CheckCircle2 size={12} />
-                    Active
-                </span>
-            );
-        } else if (norm === 'maintenance' || norm === 'repair' || norm === 'logged') {
-            return (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase tracking-wider">
-                    <Wrench size={12} />
-                    Maintenance
-                </span>
-            );
-        } else if (norm === 'in transit' || norm === 'transit' || norm === 'moving') {
-            return (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20 uppercase tracking-wider">
-                    <Truck size={12} />
-                    In Transit
-                </span>
-            );
-        }
-        return (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full bg-bg-base text-text-secondary border border-brand-border uppercase tracking-wider">
-                <Activity size={12} />
-                {status}
-            </span>
-        );
-    };
+    const isAuthorizedToLog = role === 'admin' || role === 'ops_manager';
+    const isAuthorizedToClose = role === 'tech' || role === 'admin';
 
     return (
-        <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 text-text-primary">
-            {/* Header section with back navigation and Log Service Ticket button */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                    <Link to="/assets" className="inline-flex items-center gap-1 text-text-secondary hover:text-brand-gold transition-colors text-xs font-bold uppercase tracking-wider mb-1">
-                        <ChevronLeft size={14} /> Back to Fleet Inventory
-                    </Link>
-                    <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-text-primary flex items-center gap-2">
-                        {assetName}
-                    </h1>
-                    <p className="text-xs text-text-secondary">
-                        Comprehensive ledger profiling and Fixed Asset Management (FAM) parameters
-                    </p>
-                </div>
-                <div className="flex gap-2.5">
-                    <button
-                        onClick={() => setIsTicketModalOpen(true)}
-                        className="px-4 py-2 rounded-lg bg-brand-gold hover:bg-brand-gold/90 text-white transition-colors text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer shadow-sm min-h-[44px]"
-                        id="btn-log-service-ticket"
-                    >
-                        <Wrench size={16} /> Log Service Ticket
-                    </button>
-                </div>
+        <div className="p-4 md:p-8 max-w-4xl relative space-y-6 font-sans">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+              <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">{asset.asset_name}</h1>
+              {isAuthorizedToLog && (
+                <button 
+                  onClick={() => setIsTicketModalOpen(true)}
+                  className="bg-brand-gold hover:bg-brand-gold/90 text-white font-medium text-sm py-2.5 px-4 rounded-lg transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5 self-start min-h-[44px]"
+                >
+                  🛠️ Create Service Ticket
+                </button>
+              )}
             </div>
 
-            {/* Primary Profile Details Card - Presents 7 Requested Fields */}
-            <div className="bg-bg-elevated p-6 sm:p-8 rounded-2xl border border-brand-border shadow-md space-y-6">
-                <div>
-                    <h2 className="text-lg font-bold text-text-primary flex items-center gap-2 border-b border-brand-border/40 pb-3">
-                        <Shield className="text-brand-gold" size={20} />
-                        Fixed Asset Management Profile
-                    </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                {/* Identifiers Card */}
+                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h3 className="font-bold text-text-primary mb-3">Identifiers</h3>
+                        <p className="text-text-secondary text-sm mb-1.5">S/N: <span className="text-text-primary font-mono">{asset.serial_number}</span></p>
+                        <p className="text-text-secondary text-sm">QR Code: <span className="text-text-primary font-mono">{asset.qr_code}</span></p>
+                    </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* Item 1: Asset Name */}
-                    <div className="bg-bg-base/40 p-5 rounded-xl border border-brand-border/55 space-y-1.5 hover:border-brand-border/85 transition-colors">
-                        <span className="text-[10px] font-extrabold text-brand-gold uppercase tracking-wider block">Asset Name</span>
-                        <p className="text-sm font-bold text-text-primary leading-tight">{assetName}</p>
-                    </div>
-
-                    {/* Item 2: Serial Number */}
-                    <div className="bg-bg-base/40 p-5 rounded-xl border border-brand-border/55 space-y-1.5 hover:border-brand-border/85 transition-colors">
-                        <span className="text-[10px] font-extrabold text-brand-gold uppercase tracking-wider block">Serial Number / S/N</span>
-                        <p className="text-sm font-mono font-bold text-text-primary">{serialNumber}</p>
-                    </div>
-
-                    {/* Item 3: QR Code */}
-                    <div className="bg-bg-base/40 p-5 rounded-xl border border-brand-border/55 space-y-1.5 hover:border-brand-border/85 transition-colors">
-                        <span className="text-[10px] font-extrabold text-brand-gold uppercase tracking-wider block">QR Code</span>
-                        <div className="flex items-center gap-2">
-                            <QrCode size={14} className="text-text-secondary" />
-                            <p className="text-sm font-mono font-bold text-text-primary truncate" title={qrCode}>{qrCode}</p>
-                        </div>
-                    </div>
-
-                    {/* Item 4: Customer */}
-                    <div className="bg-bg-base/40 p-5 rounded-xl border border-brand-border/55 space-y-1.5 hover:border-brand-border/85 transition-colors">
-                        <span className="text-[10px] font-extrabold text-brand-gold uppercase tracking-wider block">Customer</span>
-                        <p className="text-sm font-bold text-text-primary">{customer}</p>
-                    </div>
-
-                    {/* Item 5: Contract Number */}
-                    <div className="bg-bg-base/40 p-5 rounded-xl border border-brand-border/55 space-y-1.5 hover:border-brand-border/85 transition-colors">
-                        <span className="text-[10px] font-extrabold text-brand-gold uppercase tracking-wider block">Contract Number / Contract#</span>
-                        <p className="text-sm font-mono font-semibold text-text-primary">{contractNo}</p>
-                    </div>
-
-                    {/* Item 6: Cost Price */}
-                    <div className="bg-bg-base/40 p-5 rounded-xl border border-brand-border/55 space-y-1.5 hover:border-brand-border/85 transition-colors">
-                        <span className="text-[10px] font-extrabold text-brand-gold uppercase tracking-wider block">Cost Price / Cost Amount</span>
-                        <p className="text-sm font-semibold text-green-500 font-mono">{formatCurrency(costPrice)}</p>
-                    </div>
-
-                    {/* Item 7: Section / Location */}
-                    <div className="bg-bg-base/40 p-5 rounded-xl border border-brand-border/55 space-y-1.5 hover:border-brand-border/85 transition-colors lg:col-span-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] font-extrabold text-brand-gold uppercase tracking-wider block">Section / Location (Current Location)</span>
-                            <div className="flex items-center gap-1.5">
-                                <MapPin size={16} className="text-brand-gold" />
-                                <span className="text-sm font-bold text-text-primary">{currentLocation}</span>
-                            </div>
-                        </div>
-                        <div>
+                {/* Section / Location Card */}
+                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between gap-4">
+                    <div>
+                        <h3 className="font-bold text-text-primary mb-3">Section Details</h3>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2 pb-2">
+                            <p className="text-text-secondary text-sm">Section: <span className="text-text-primary font-medium">{asset.section}</span></p>
                             {!can_update_location ? (
                                 <button 
-                                    className="text-text-secondary/50 text-xs font-bold uppercase tracking-wider cursor-not-allowed py-2 px-3 bg-bg-base rounded-lg border border-brand-border/60 flex items-center gap-1.5" 
-                                    title="Permission denied"
+                                    className="text-text-secondary/50 text-sm font-medium text-left cursor-not-allowed min-h-[32px] py-1 flex items-center gap-1.5" 
+                                    title="Permission restricted"
                                     disabled
                                 >
-                                    Location Locked 🔒
+                                    Change Section <span className="text-[10px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Blocked</span>
                                 </button>
                             ) : (
-                                <button 
-                                    onClick={() => setIsModalOpen(true)} 
-                                    className="text-brand-gold hover:text-white bg-brand-gold/10 hover:bg-brand-gold border border-brand-gold/20 hover:border-brand-gold transition-all text-xs font-bold uppercase tracking-wider py-2 px-4 rounded-lg cursor-pointer flex items-center gap-1.5 min-h-[40px]"
-                                >
-                                    <MapPin size={14} /> Update Location
-                                </button>
+                                <button onClick={() => { setIsModalOpen(true); fetchSections(); }} className="text-brand-gold text-sm font-medium hover:underline text-left cursor-pointer min-h-[32px] py-1">Change Section</button>
                             )}
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Maintenance Tickets Section */}
-            <div className="bg-bg-elevated rounded-2xl border border-brand-border shadow-sm overflow-hidden mt-8">
-                <div className="p-6 border-b border-brand-border bg-bg-elevated/40 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                        <Wrench className="text-brand-gold" size={20} />
-                        <div>
-                            <h2 className="text-lg font-bold text-text-primary">📋 Maintenance Log & Tickets</h2>
-                            <p className="text-xs text-text-secondary mt-0.5">Historic audit logs of mechanical repairs and services</p>
+            {/* Service Logs / Tickets History Section */}
+            <section className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm">
+              <h2 className="font-bold text-text-primary mb-4 text-base border-b border-brand-border pb-2">Active Service & Maintenance Tickets</h2>
+              {tickets.length === 0 ? (
+                <p className="text-sm text-text-secondary text-center py-6">No service tickets logged for this equipment asset.</p>
+              ) : (
+                <div className="space-y-3">
+                  {tickets.map(ticket => (
+                    <div key={ticket.id} className="p-4 bg-bg-base border border-brand-border rounded-lg flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs">
+                      <div className="space-y-1">
+                        <p className="text-text-primary font-semibold text-sm">{ticket.issue_description}</p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-text-secondary font-mono">
+                            <span>Opened: {new Date(ticket.created_at).toLocaleDateString()}</span>
+                            {ticket.resolved_at && (
+                                <span>Closed: {new Date(ticket.resolved_at).toLocaleDateString()}</span>
+                            )}
                         </div>
-                    </div>
-                    <span className="text-xs bg-bg-base px-3 py-1 rounded-full border border-brand-border text-text-secondary font-bold font-mono">
-                        {tickets.length} {tickets.length === 1 ? 'RECORD' : 'RECORDS'}
-                    </span>
-                </div>
+                        {ticket.resolution_notes && (
+                            <div className="mt-2 p-2.5 bg-bg-elevated/50 border border-brand-border/40 rounded-md text-xs">
+                                <span className="block font-bold text-text-secondary uppercase text-[9px] mb-0.5">Resolution Notes:</span>
+                                <p className="text-text-primary">{ticket.resolution_notes}</p>
+                            </div>
+                        )}
+                      </div>
 
-                <div className="p-6">
-                    {loadingTickets ? (
-                        <div className="p-8 text-center text-text-secondary flex flex-col items-center gap-2">
-                            <div className="w-6 h-6 border-2 border-brand-gold border-t-transparent rounded-full animate-spin"></div>
-                            <p className="text-sm">Loading service records...</p>
-                        </div>
-                    ) : tickets.length === 0 ? (
-                        <div className="border border-dashed border-brand-border/85 p-8 rounded-xl text-center max-w-md mx-auto">
-                            <div className="text-3xl mb-2">✅</div>
-                            <p className="text-sm text-text-primary font-bold">No Active Maintenance Tickets</p>
-                            <p className="text-xs text-text-secondary mt-1">This machine is running smoothly. No defects or manual logs exist in this tracker history.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {tickets.map((ticket) => (
-                                <div 
-                                    key={ticket.id} 
-                                    className="bg-bg-base/60 p-5 rounded-xl border border-brand-border shadow-sm flex flex-col sm:flex-row sm:items-start justify-between gap-4 transition-all hover:border-brand-border/80"
-                                >
-                                    <div className="space-y-2 flex-grow">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-brand-gold/10 text-brand-gold uppercase tracking-wider font-mono">
-                                                Ticket #{ticket.id}
-                                            </span>
-                                            {ticket.created_at && (
-                                                <span className="text-xs text-text-secondary font-mono">
-                                                    {new Date(ticket.created_at).toLocaleString()}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p className="text-text-primary text-sm font-medium whitespace-pre-wrap leading-relaxed">
-                                            {ticket.issue_description}
-                                        </p>
-                                    </div>
-                                    <div className="text-[10px] text-text-secondary self-start sm:self-center font-mono font-bold py-1 px-2.5 bg-bg-elevated border border-brand-border/50 rounded-lg uppercase tracking-wider">
-                                        Status: <span className="text-green-500 font-extrabold font-mono">Logged</span>
-                                    </div>
-                                </div>
-                            ))}
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <span className={`px-2.5 py-1 font-bold rounded text-[10px] uppercase tracking-wider ${
+                            ticket.status === 'Resolved' 
+                              ? 'bg-emerald-500/10 text-emerald-500' 
+                              : 'bg-amber-500/10 text-amber-500'
+                        }`}>
+                            {ticket.status}
+                        </span>
+                        {ticket.status !== 'Resolved' && isAuthorizedToClose && (
+                            <button 
+                                onClick={() => { setSelectedTicketId(ticket.id); setIsResolveModalOpen(true); }}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs py-1.5 px-3 rounded transition-colors cursor-pointer shadow-sm"
+                            >
+                                ✔️ Close Ticket
+                            </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* Modal for adding a ticket (Admins / Ops Managers) */}
+            {isTicketModalOpen && (
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-100">
+                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl space-y-4">
+                  <header>
+                    <h2 className="text-lg font-bold text-text-primary">Create Service Ticket</h2>
+                    <p className="text-xs text-text-secondary">Log a failure, corrective action or maintenance requirement.</p>
+                  </header>
+                  <form onSubmit={handleSubmitTicket} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-text-secondary mb-1">Issue Details / Notes *</label>
+                      <textarea 
+                        required
+                        rows={3}
+                        placeholder="Describe technical checks, maintenance or issues..."
+                        value={newTicketIssue} 
+                        onChange={(e) => setNewTicketIssue(e.target.value)}
+                        className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm resize-none"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button type="button" onClick={() => setIsTicketModalOpen(false)} className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-base rounded-lg transition-colors cursor-pointer min-h-[44px]">Cancel</button>
+                      <button type="submit" disabled={submittingTicket} className="bg-brand-gold text-white px-5 py-2 rounded-lg font-medium text-sm hover:bg-brand-gold/90 transition-colors flex items-center justify-center min-h-[44px] cursor-pointer">
+                        {submittingTicket ? 'Saving...' : 'Save Ticket'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Modal for closing a ticket (Technicians) */}
+            {isResolveModalOpen && (
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-100">
+                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl space-y-4">
+                  <header>
+                    <h2 className="text-lg font-bold text-text-primary">Close Maintenance Ticket</h2>
+                    <p className="text-xs text-text-secondary">Verify machinery and upload evidence to finalize.</p>
+                  </header>
+                  <form onSubmit={handleResolveTicket} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-text-secondary mb-1">Resolution Details *</label>
+                      <textarea 
+                        required
+                        rows={2}
+                        placeholder="Resolution actions..."
+                        value={resolutionNotes} 
+                        onChange={(e) => setResolutionNotes(e.target.value)}
+                        className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm resize-none"
+                      />
+                    </div>
+                    
+                    {/* QR Verification Step */}
+                    {!qrVerified && (
+                        <div className="space-y-2">
+                            <label className="block text-xs font-semibold text-text-secondary">Verify QR Code *</label>
+                            <div id="qr-reader" className="w-full overflow-hidden rounded-lg border border-brand-border" />
+                            <button type="button" onClick={() => {
+                                setIsScanning(true);
+                                const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: {width: 200, height: 200} }, false);
+                                scanner.render((decodedText) => {
+                                    if(decodedText === asset?.qr_code) {
+                                        setQrVerified(true);
+                                        setScannedQr(decodedText);
+                                        scanner.clear();
+                                    } else {
+                                        toast.error("Verification Failed: Scanned QR does not match this asset");
+                                    }
+                                }, (err) => {
+                                    console.error(err);
+                                    if (err?.name === 'NotAllowedError') {
+                                        toast.error("Camera permission denied. Please allow camera access in your browser settings.");
+                                    } else {
+                                        toast.error("Error accessing camera. Please try again.");
+                                    }
+                                });
+                            }} className="w-full py-2 bg-brand-gold text-white text-xs font-medium rounded-lg">Start Scanning</button>
                         </div>
                     )}
-                </div>
-            </div>
+                    {qrVerified && <p className="text-emerald-500 text-xs font-bold flex items-center gap-1"><CheckCircle2 size={12}/> QR Code Verified</p>}
 
-            {/* Edit Section Modal */}
+                    {/* Photo Upload Step */}
+                    {qrVerified && (
+                         <div className="space-y-2">
+                             <label className="block text-xs font-semibold text-text-secondary">📸 Photo Evidence *</label>
+                             <input type="file" accept="image/*" capture="environment" onChange={async (e) => {
+                                 if(!e.target.files || e.target.files.length === 0) return;
+                                 setUploadingImage(true);
+                                 const file = e.target.files[0];
+                                 const filePath = `tickets/${selectedTicketId}_${Date.now()}.jpg`;
+                                 const { error } = await supabase.storage.from('ticket-evidence').upload(filePath, file);
+                                 if(error) { toast.error("Upload failed"); setUploadingImage(false); }
+                                 else {
+                                     const { data } = supabase.storage.from('ticket-evidence').getPublicUrl(filePath);
+                                     setPhotoUrl(data.publicUrl);
+                                     setUploadingImage(false);
+                                 }
+                             }} className="w-full text-sm text-text-secondary border border-brand-border rounded-lg p-2" />
+                             {uploadingImage && <p className="text-xs text-brand-gold">Uploading photo...</p>}
+                             {photoUrl && (
+                                <div className="mt-2 border border-brand-border p-2 rounded-lg bg-bg-base/50">
+                                    <p className="text-xs text-emerald-500 font-bold mb-1">📷 Photo Captured</p>
+                                    <img src={photoUrl} className="h-20 w-full object-cover rounded" alt="Evidence" />
+                                </div>
+                             )}
+                         </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button type="button" onClick={() => { setIsResolveModalOpen(false); setSelectedTicketId(null); setQrVerified(false); setPhotoUrl(null); }} className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-base rounded-lg transition-colors cursor-pointer min-h-[44px]">Cancel</button>
+                      <button type="submit" disabled={submittingResolution || uploadingImage || !qrVerified || !photoUrl} className="bg-emerald-600 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors flex items-center justify-center min-h-[44px] cursor-pointer">
+                        {submittingResolution ? 'Saving...' : 'Resolve Ticket'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* Modal for editing section/location */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                    <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl animate-fade-in">
-                        <div className="flex items-center gap-2 mb-3">
-                            <MapPin className="text-brand-gold" size={20} />
-                            <h2 className="text-lg font-bold text-text-primary">Update Location / Section</h2>
-                        </div>
-                        <p className="text-xs text-text-secondary mb-4">Re-assign physical warehouse section for asset <span className="font-semibold text-text-primary">{assetName}</span>.</p>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-100">
+                    <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl">
+                        <h2 className="text-lg font-bold mb-4 text-text-primary">Update Machine Section</h2>
                         <select 
                             value={selectedSection} 
                             onChange={(e) => setSelectedSection(e.target.value)}
@@ -496,70 +394,12 @@ export function AssetDetailsPage() {
                         >
                             {sections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
                         </select>
-                        <div className="flex justify-end gap-2 border-t border-brand-border/50 pt-3">
-                            <button onClick={() => setIsModalOpen(false)} className="px-4 py-2.5 min-h-[44px] text-text-secondary hover:bg-bg-base rounded-lg cursor-pointer text-sm font-semibold transition-all">Cancel</button>
-                            <button onClick={handleSave} disabled={saving} className="bg-brand-gold text-white px-5 py-2.5 min-h-[44px] rounded-lg font-bold hover:bg-brand-gold/90 transition-all flex items-center justify-center text-sm cursor-pointer min-w-[120px]">
+                        <div className="flex justify-end gap-2">
+                            <button onClick={() => setIsModalOpen(false)} className="px-4 py-2.5 min-h-[44px] text-text-secondary hover:bg-bg-base rounded-lg cursor-pointer text-sm">Cancel</button>
+                            <button onClick={handleSave} disabled={saving} className="bg-brand-gold text-white px-5 py-2.5 min-h-[44px] rounded-lg font-medium hover:bg-brand-gold/90 transition-colors flex items-center justify-center text-sm cursor-pointer min-w-[120px]">
                                 {saving ? 'Saving...' : 'Save Changes'}
                             </button>
                         </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Create Ticket Modal */}
-            {isTicketModalOpen && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                    <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-md shadow-xl animate-fade-in">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xl">🛠️</span>
-                            <h2 className="text-lg font-bold text-text-primary font-sans">Log Service Ticket</h2>
-                        </div>
-                        <p className="text-xs text-text-secondary mb-4">
-                            Report issues, repairs, or schedule maintenance notes for <span className="font-semibold text-text-primary">{assetName}</span>.
-                        </p>
-                        
-                        <form onSubmit={handleAddTicket} className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold uppercase text-text-secondary tracking-wider mb-1.5">
-                                    Issue Details / Maintenance Notes
-                                </label>
-                                <textarea
-                                    value={ticketIssue}
-                                    onChange={(e) => setTicketIssue(e.target.value)}
-                                    placeholder="Describe the issue, required repair, or regular maintenance details..."
-                                    rows={4}
-                                    required
-                                    className="w-full p-3 border border-brand-border rounded-lg bg-bg-base text-text-primary text-sm outline-none focus:border-brand-gold placeholder-text-secondary/50 transition-all font-sans"
-                                />
-                            </div>
-
-                            <div className="flex justify-end gap-2 pt-3 border-t border-brand-border/60">
-                                <button 
-                                    type="button" 
-                                    onClick={() => {
-                                        setIsTicketModalOpen(false);
-                                        navigate(`/assets/${id}`, { replace: true });
-                                    }} 
-                                    className="px-4 py-2 text-text-secondary hover:bg-bg-base rounded-lg cursor-pointer text-sm font-medium transition-all min-h-[40px]"
-                                >
-                                    Cancel
-                                </button>
-                                <button 
-                                    type="submit" 
-                                    disabled={submittingTicket || !ticketIssue.trim()} 
-                                    className="bg-brand-gold text-white px-5 py-2 rounded-lg font-semibold hover:bg-brand-gold/90 transition-colors flex items-center justify-center text-sm cursor-pointer disabled:opacity-50 min-h-[40px] gap-1.5"
-                                >
-                                    {submittingTicket ? (
-                                        <>
-                                            <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                                            Submitting...
-                                        </>
-                                    ) : (
-                                        'Submit Ticket'
-                                    )}
-                                </button>
-                            </div>
-                        </form>
                     </div>
                 </div>
             )}

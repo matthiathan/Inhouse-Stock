@@ -20,3 +20,23 @@ export interface Section {
   id: string;
   section_name: string;
 }
+
+export interface Order {
+  id: string;
+  order_number: string;
+  delivery_date: string;
+  status: 'Pending' | 'Completed';
+  created_at: string;
+  completed_at?: string;
+}
+export interface StockItem {
+  id: string;
+  barcode: string;
+  units_per_box: number;
+  box_quantity: number;
+  pallet_quantity: number;
+  item_name: string;
+  notes: string;
+  quantity: number;
+  sku: string;
+}

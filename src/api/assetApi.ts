@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
 
 export const getAssetByQR = async (qr: string) => {
   const { data, error } = await supabase
@@ -274,12 +275,67 @@ export const getStockByBarcode = async (barcode: string) => {
   return data;
 };
 
-export const updateStockQuantities = async (barcode: string, pallets: number, boxes: number) => {
+export const getNextOrderNumber = async (): Promise<string> => {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('order_number')
+    .order('order_number', { ascending: false })
+    .limit(1);
+
+  if (error) { toast.error("Error fetching next order number"); throw error; }
+
+  if (!data || data.length === 0) return 'ORD-1000';
+
+  const lastOrderNumber = data[0].order_number;
+  const numericPart = parseInt(lastOrderNumber.split('-')[1], 10);
+  return `ORD-${numericPart + 1}`;
+};
+
+export const getAvailableStock = async () => {
+    const { data, error } = await supabase.from('stock').select('*');
+    if (error) throw error;
+    
+    return data.map(item => ({
+        ...item,
+        total_available_units: (item.pallet_quantity * 48 * (item.units_per_box || 1)) + 
+                              (item.box_quantity * (item.units_per_box || 1))
+    }));
+};
+
+export const deductStockQuantity = async (barcode: string, palletsToDeduct: number, boxesToDeduct: number, unitsToDeduct: number) => {
+  const currentStock = await getStockByBarcode(barcode);
+  if (!currentStock) throw new Error("Stock item not found");
+
+  const unitsPerBox = currentStock.units_per_box || 1;
+  const boxesPerPallet = 48; // Defaulting
+  
+  const currentTotalUnits = (currentStock.pallet_quantity * boxesPerPallet * unitsPerBox) + 
+                            (currentStock.box_quantity * unitsPerBox);
+
+  const totalDeduction = (palletsToDeduct * boxesPerPallet * unitsPerBox) + 
+                         (boxesToDeduct * unitsPerBox) + 
+                         unitsToDeduct;
+
+  if (currentTotalUnits < totalDeduction) {
+    throw new Error("Insufficient stock");
+  }
+
+  const remainingTotalUnits = currentTotalUnits - totalDeduction;
+
+  const newPallets = Math.floor(remainingTotalUnits / (boxesPerPallet * unitsPerBox));
+  const remainingAfterPallets = remainingTotalUnits % (boxesPerPallet * unitsPerBox);
+  const newBoxes = Math.floor(remainingAfterPallets / unitsPerBox);
+
+  return await updateStockQuantities(barcode, newPallets, newBoxes, remainingTotalUnits);
+};
+
+export const updateStockQuantities = async (barcode: string, pallets: number, boxes: number, totalUnits: number) => {
   const { data, error } = await supabase
     .from('stock')
     .update({
       pallet_quantity: pallets,
-      box_quantity: boxes
+      box_quantity: boxes,
+      quantity: totalUnits
     })
     .eq('barcode', barcode)
     .select();

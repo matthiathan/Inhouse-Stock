@@ -1,15 +1,22 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { Package, Database, QrCode, Settings, BarChart3 } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function DashboardLayout() {
-  const navItems = [
-    { name: 'Stock', path: '/stock', icon: Package },
-    { name: 'Assets', path: '/assets', icon: Database },
-    { name: 'Scanner', path: '/scanner', icon: QrCode },
-    { name: 'Analytics', path: '/analytics', icon: BarChart3 },
-    { name: 'Settings', path: '/settings', icon: Settings },
+  const { role } = useAuth();
+  
+  const userRole = role || 'user';
+
+  const allNavItems = [
+    { name: 'Stock', path: '/stock', icon: Package, roles: ['admin', 'ops_manager', 'warehouse'] },
+    { name: 'Assets', path: '/assets', icon: Database, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'user'] },
+    { name: 'Scanner', path: '/scanner', icon: QrCode, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'user'] },
+    { name: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['admin', 'ops_manager'] },
+    { name: 'Settings', path: '/settings', icon: Settings, roles: ['admin', 'ops_manager'] },
   ];
+
+  const navItems = allNavItems.filter(item => item.roles.includes(userRole));
 
   return (
     <div className="flex min-h-screen bg-bg-base text-text-primary">

@@ -3,14 +3,59 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import DashboardLayout from './components/layout/DashboardLayout';
-import { StockPage, AssetsPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage } from './pages';
+import { StockPage, AssetsPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage } from './pages';
 import { useAuth } from './hooks/useAuth';
 
+interface RoleProtectedRouteProps {
+  children: React.ReactNode;
+  allowedRoles: string[];
+}
+
+function RoleProtectedRoute({ children, allowedRoles }: RoleProtectedRouteProps) {
+  const { user, role, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-bg-base text-brand-gold font-mono">
+        <div className="animate-pulse">Verifying security parameters...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const userRole = role || 'user';
+
+  if (!allowedRoles.includes(userRole)) {
+    const redirectTarget = (userRole === 'tech' || userRole === 'user') ? '/scanner' : '/stock';
+    return <Navigate to={redirectTarget} replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function IndexRedirect() {
+  const { role } = useAuth();
+  const target = (role === 'tech' || role === 'user') ? '/scanner' : '/stock';
+  return <Navigate to={target} replace />;
+}
+
 export default function App() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg-base text-brand-gold font-mono">
+        <div className="animate-pulse">Loading Dallmayr SA system...</div>
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter>
@@ -22,14 +67,43 @@ export default function App() {
           path="/*" 
           element={user ? <DashboardLayout /> : <Navigate to="/login" replace />}
         >
-          <Route index element={<Navigate to="/stock" replace />} />
-          <Route path="stock" element={<StockPage />} />
+          <Route index element={<IndexRedirect />} />
+          <Route 
+            path="stock" 
+            element={
+              <RoleProtectedRoute allowedRoles={['admin', 'ops_manager', 'warehouse']}>
+                <StockPage />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
+            path="orders" 
+            element={
+              <RoleProtectedRoute allowedRoles={['admin', 'ops_manager', 'warehouse']}>
+                <OrdersPage />
+              </RoleProtectedRoute>
+            } 
+          />
           <Route path="assets" element={<AssetsPage />} />
           <Route path="assets/:id" element={<AssetDetailsPage />} />
           <Route path="customers/:code" element={<CustomerDetailsPage />} />
           <Route path="scanner" element={<ScannerPage />} />
-          <Route path="analytics" element={<AnalyticsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route 
+            path="analytics" 
+            element={
+              <RoleProtectedRoute allowedRoles={['admin', 'ops_manager']}>
+                <AnalyticsPage />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
+            path="settings" 
+            element={
+              <RoleProtectedRoute allowedRoles={['admin', 'ops_manager']}>
+                <SettingsPage />
+              </RoleProtectedRoute>
+            } 
+          />
         </Route>
       </Routes>
     </BrowserRouter>

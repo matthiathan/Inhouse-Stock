@@ -8,6 +8,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   role: string | null;
+  isAdmin: boolean;
   can_update_location: boolean;
   refreshProfile: () => Promise<void>;
   loginDemo: (roleName: 'admin' | 'user') => void;
@@ -18,6 +19,7 @@ export const AuthContext = createContext<AuthContextType>({
   session: null,
   loading: true,
   role: null,
+  isAdmin: false,
   can_update_location: true,
   refreshProfile: async () => {},
   loginDemo: () => {},
@@ -175,7 +177,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, role, can_update_location: canUpdateLocation, refreshProfile, loginDemo }}>
+    <AuthContext.Provider value={{ user, session, loading, role, isAdmin: role === 'admin', can_update_location: canUpdateLocation, refreshProfile, loginDemo }}>
       {children}
     </AuthContext.Provider>
   );
@@ -205,5 +207,5 @@ export const useAuth = () => {
     return { error: null };
   };
 
-  return { ...context, login, logout };
+  return { ...context, isAdmin: context.role === 'admin', login, logout };
 };
