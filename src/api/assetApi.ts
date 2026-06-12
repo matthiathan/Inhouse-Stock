@@ -5,7 +5,7 @@ export const getAssetByQR = async (qr: string) => {
     .from('machines')
     .select('*')
     .eq('qr_code', qr)
-    .single();
+    .maybeSingle();
     
   if (error) throw error;
   return data;

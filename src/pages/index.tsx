@@ -1424,7 +1424,7 @@ export function ScannerPage() {
       fps: 24, // Elevated frame rate for near-instant detection
       qrbox: isMobile 
         ? { width: 300, height: 140 } 
-        : { width: 440, height: 200 }, // Rectangular layout accommodates wide 1D barcodes and square QR codes
+        : { width: 440, height: 220 }, // Rectangular layout accommodates wide 1D barcodes and square QR codes
       formatsToSupport: [
         Html5QrcodeSupportedFormats.QR_CODE,
         Html5QrcodeSupportedFormats.EAN_13,
