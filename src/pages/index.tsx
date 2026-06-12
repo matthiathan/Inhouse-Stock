@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Machine, Customer, Section } from '../types';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { toast } from 'sonner';
-import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineModels, getNextFADocSequence } from '../api/assetApi';
+import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineModels, getNextFADocSequence, getStockByBarcode } from '../api/assetApi';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
@@ -26,6 +26,7 @@ export function StockPage() {
   const [saving, setSaving] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams] = useSearchParams();
 
   const resetForm = () => {
     setFormItem('');
@@ -36,6 +37,37 @@ export function StockPage() {
     setFormUnitsPerBox('');
     setFormNotes('');
   };
+
+  useEffect(() => {
+    const barcodeParam = searchParams.get('barcode');
+    if (barcodeParam) {
+      setFormBarcode(barcodeParam);
+      // Try to find a matching item in the loaded stockItems
+      const matched = stockItems.find(item => {
+        const itemBarcode = item.barcode || item.Barcode;
+        const itemSku = item.sku || item.SKU;
+        return (itemBarcode && String(itemBarcode) === barcodeParam) || (itemSku && String(itemSku) === barcodeParam);
+      });
+
+      if (matched) {
+        setFormItem(matched.item_name || matched.item || matched['Item Name'] || matched['item'] || '');
+        setFormUnitsPerBox(String(matched.units_per_box !== undefined && matched.units_per_box !== null ? matched.units_per_box : '12'));
+        setFormPalletQty(String(matched.pallet_quantity !== undefined && matched.pallet_quantity !== null ? matched.pallet_quantity : '0'));
+        setFormBoxesPerPallet(String(matched.boxes_per_pallet !== undefined && matched.boxes_per_pallet !== null ? matched.boxes_per_pallet : '48'));
+        setFormBoxes(String(matched.box_quantity !== undefined && matched.box_quantity !== null ? matched.box_quantity : '0'));
+        setFormNotes(matched.notes || matched.Notes || '');
+      } else {
+        // Safe defaults for brand new item
+        setFormItem('');
+        setFormPalletQty('0');
+        setFormBoxesPerPallet('48');
+        setFormBoxes('0');
+        setFormUnitsPerBox('12');
+        setFormNotes('');
+      }
+      setIsModalOpen(true);
+    }
+  }, [searchParams, stockItems]);
 
   useEffect(() => {
     const detectAndFetch = async () => {
@@ -1365,72 +1397,85 @@ export function ScannerPage() {
 
   useEffect(() => {
     let isMounted = true;
-    const html5QrCode = new Html5Qrcode("reader");
+    const html5QrCode = new Html5Qrcode("reader", {
+      verbose: false,
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39
+      ]
+    });
     scannerRef.current = html5QrCode;
     let isScanning = false;
 
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 150 }, // Barcodes are wider than QR
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39
+      ]
+    };
+
     const startPromise = html5QrCode.start(
       { facingMode: "environment" },
-      {
-        fps: 10,
-        qrbox: { width: 220, height: 220 }
-      },
+      config,
       async (decodedText) => {
-        // Prevent concurrent processing immediately using the ref lock
         if (isProcessingRef.current) return;
         isProcessingRef.current = true;
         setIsProcessing(true);
 
         try {
           if (html5QrCode.isScanning) {
-            html5QrCode.pause(true);
-          }
-        } catch (e) {
-          console.warn("Could not pause scanner:", e);
-        }
-        
-        const loadingToastId = toast.loading("Checking database for asset: " + decodedText);
-
-        try {
-          // Add a tiny delay to let the camera pause settle
-          await new Promise(resolve => setTimeout(resolve, 300));
-
-          let foundMachine: Machine | null = null;
-          try {
-            foundMachine = await getAssetByQR(decodedText) as Machine | null;
-          } catch (e) {
-            console.warn("API QR find error:", e);
+            try {
+              html5QrCode.pause(true);
+            } catch (e) {
+              console.warn("Could not pause scanner:", e);
+            }
           }
 
-          toast.dismiss(loadingToastId);
-
-          if (foundMachine) {
+          // 1. Try Machine Table
+          const machine = await getAssetByQR(decodedText);
+          if (machine) {
             toast.success("Asset found!");
             if (isMounted) {
-              setScannedMachine(foundMachine);
+              setScannedMachine(machine as Machine);
+              setIsProcessing(false);
             }
-          } else {
-            // Show unrecognized modal instead of auto-resuming
+            return;
+          }
+
+          // 2. Try Stock Table
+          const stockItem = await getStockByBarcode(decodedText);
+          if (stockItem) {
+            toast.success("Stock item found!");
             if (isMounted) {
-              setUnrecognizedQr(decodedText);
+              navigate(`/stock?barcode=${encodeURIComponent(decodedText)}`);
             }
+            return;
+          }
+
+          // 3. Not found
+          if (isMounted) {
+            setUnrecognizedQr(decodedText);
+            setIsProcessing(false);
           }
         } catch (err: any) {
-          toast.dismiss(loadingToastId);
-          toast.error(err.message || "Error locating asset");
-          setIsProcessing(false);
-          isProcessingRef.current = false;
-          setTimeout(() => {
-            if (isMounted) {
-              try {
-                if (html5QrCode.isScanning) {
-                  html5QrCode.resume();
-                }
-              } catch (e) {
-                console.warn("Could not resume scanner:", e);
+          toast.error(err.message || "Error processing scanned code");
+          if (isMounted) {
+            setIsProcessing(false);
+            isProcessingRef.current = false;
+            try {
+              if (html5QrCode.isScanning) {
+                html5QrCode.resume();
               }
+            } catch (e) {
+              console.warn("Could not resume:", e);
             }
-          }, 2000);
+          }
         }
       },
       (errorMessage) => {

@@ -259,3 +259,34 @@ export const getNextFADocSequence = async (): Promise<number> => {
 
   return maxSeq + 1;
 };
+
+export const getStockByBarcode = async (barcode: string) => {
+  const { data, error } = await supabase
+    .from('stock')
+    .select('*')
+    .eq('barcode', barcode)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error executing getStockByBarcode:", error);
+    throw error;
+  }
+  return data;
+};
+
+export const updateStockQuantities = async (barcode: string, pallets: number, boxes: number) => {
+  const { data, error } = await supabase
+    .from('stock')
+    .update({
+      pallet_quantity: pallets,
+      box_quantity: boxes
+    })
+    .eq('barcode', barcode)
+    .select();
+
+  if (error) {
+    console.error("Error executing updateStockQuantities:", error);
+    throw error;
+  }
+  return data;
+};
