@@ -1381,6 +1381,8 @@ export function ScannerPage() {
   const [unrecognizedQr, setUnrecognizedQr] = useState<string | null>(null);
   const scannerRef = React.useRef<Html5Qrcode | null>(null);
 
+  const Maps = navigate;
+
   const handleCancelAndRescan = () => {
     setScannedMachine(null);
     setUnrecognizedQr(null);
@@ -1404,16 +1406,25 @@ export function ScannerPage() {
     // Detect if device is mobile to size scanning box appropriately
     const isMobile = window.innerWidth < 768;
     
-    // Exactly 1 key constraint to satisfy the html5-qrcode cameraIdOrConfig validator checks
-    const cameraConstraints = {
-      facingMode: "environment"
-    };
+    // Advanced hardware continuous autofocus constraint
+    const constraints: any = { facingMode: 'environment', advanced: [{ focusMode: 'continuous' }] };
+
+    // To satisfy html5-qrcode's strict 'exactly 1 key' validation check, we proxy constraints to hide 'advanced' from enumerable keys
+    const validatedConstraints = new Proxy(constraints, {
+      ownKeys() { return ['facingMode']; },
+      getOwnPropertyDescriptor(target, prop) {
+        if (prop === 'advanced') {
+          return { enumerable: false, configurable: true, ...Reflect.getOwnPropertyDescriptor(target, prop) };
+        }
+        return Reflect.getOwnPropertyDescriptor(target, prop);
+      }
+    });
 
     const config = {
-      fps: 20, // Elevated frame rate for near-instant detection
+      fps: 24, // Elevated frame rate for near-instant detection
       qrbox: isMobile 
-        ? { width: 280, height: 120 } 
-        : { width: 420, height: 180 }, // Rectangular layout accommodates wide 1D barcodes and square QR codes
+        ? { width: 300, height: 140 } 
+        : { width: 440, height: 200 }, // Rectangular layout accommodates wide 1D barcodes and square QR codes
       formatsToSupport: [
         Html5QrcodeSupportedFormats.QR_CODE,
         Html5QrcodeSupportedFormats.EAN_13,
@@ -1431,7 +1442,7 @@ export function ScannerPage() {
     };
 
     const startPromise = html5QrCode.start(
-      cameraConstraints,
+      validatedConstraints,
       config,
       async (decodedText) => {
         if (isProcessingRef.current) return;
@@ -1463,28 +1474,30 @@ export function ScannerPage() {
           if (stockItem) {
             toast.success("Stock item found!");
             if (isMounted) {
-              navigate(`/stock?barcode=${encodeURIComponent(decodedText)}`);
+              Maps('/stock?barcode=' + encodeURIComponent(decodedText));
             }
             return;
           }
 
-          // 3. Not found
+          // 3. If neither table contains the scanned string, route directly to the new stock registration form
+          toast.success("No matching record found. Registering new stock item...");
           if (isMounted) {
-            setUnrecognizedQr(decodedText);
-            setIsProcessing(false);
+            Maps('/stock?action=add_stock&barcode=' + encodeURIComponent(decodedText));
           }
         } catch (err: any) {
           toast.error(err.message || "Error processing scanned code");
           if (isMounted) {
             setIsProcessing(false);
             isProcessingRef.current = false;
-            try {
-              if (html5QrCode.isScanning) {
-                html5QrCode.resume();
+            setTimeout(() => {
+              try {
+                if (html5QrCode.isScanning) {
+                  html5QrCode.resume();
+                }
+              } catch (e) {
+                console.warn("Could not resume:", e);
               }
-            } catch (e) {
-              console.warn("Could not resume:", e);
-            }
+            }, 2000);
           }
         }
       },
