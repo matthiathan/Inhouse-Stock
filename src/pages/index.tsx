@@ -707,29 +707,22 @@ export function AssetsPage() {
   // Fetch assets whenever selectedSection or refreshTrigger changes
   useEffect(() => {
     const fetchAssets = async () => {
-      setLoading(true);
-      try {
-        let query = supabase
-          .from('machines')
-          .select('id, serial_number, qr_code, asset_name, section');
+        setLoading(true);
+        try {
+            let query = supabase.from('machines').select('id, serial_number, qr_code, asset_name, section');
+            
+            if (selectedSection) {
+                query = query.eq('section', selectedSection);
+            }
 
-        if (selectedSection) {
-          query = query.eq('section', selectedSection);
+            const { data, error } = await query;
+            if (error) throw error;
+            setAssets(data || []);
+        } catch (err: any) {
+            toast.error("Error fetching: " + err.message);
+        } finally {
+            setLoading(false);
         }
-
-        const { data, error } = await query;
-        if (error) {
-          toast.error(`Failed to fetch assets: ${error.message}`);
-          setAssets([]);
-        } else {
-          setAssets(data as Machine[] || []);
-        }
-      } catch (err: any) {
-        toast.error(`Error fetching assets: ${err.message || 'Unknown error'}`);
-        setAssets([]);
-      } finally {
-        setLoading(false);
-      }
     };
 
     fetchAssets();
@@ -1194,20 +1187,20 @@ export function AssetDetailsPage() {
         if (!asset || !selectedSection) return;
         setSaving(true);
         try {
-            // 1. Await the DB update
+            // 1. Perform the database update
             await updateAssetSection(asset.id, selectedSection);
             
-            // 2. CRITICAL: Update the state directly and ensure it's not being overridden by cache
+            // 2. CRITICAL: Force the local state to match the new DB value
             setAsset(prev => prev ? { ...prev, section: selectedSection } : null);
             
-            // 3. Clear local cache so the next refresh forces a fetch
+            // 3. CRITICAL: Clear the local cache so the app is forced to fetch fresh data next time
             localStorage.removeItem('cached_assets');
             
             toast.success("Section updated successfully!");
             setIsModalOpen(false);
         } catch (err: any) {
-            console.error('Update failed:', err);
-            toast.error("Update failed. Check your network or permissions.");
+            toast.error("Database update failed.");
+        } finally {
             setSaving(false);
         }
     };

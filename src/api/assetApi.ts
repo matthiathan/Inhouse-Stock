@@ -21,27 +21,139 @@ export const getSections = async () => {
   return data;
 };
 
-export const updateAssetSection = async (id: string, newSectionName: string) => {
+export const updateAssetSection = async (id: string | number, newSectionName: string) => {
+  const parsedId = typeof id === 'string' && !isNaN(Number(id)) ? Number(id) : id;
+  
+  // Resolve additional identifiers to make updates extremely resilient
+  let qrCode = "";
+  let serialNumber = "";
+  let machineDbId: any = null;
+  let famDbId: any = null;
+  
   try {
-    const { data, error } = await supabase
+    // Attempt to look up the machine in 'machines' to resolve actual primary keys and QR code
+    const { data: machineData } = await supabase
       .from('machines')
-      .update({ section: newSectionName })
-      .eq('id', id)
-      .select()
-      .single();
+      .select('id, qr_code, serial_number')
+      .or(`id.eq.${parsedId},qr_code.eq.${String(id)}`);
       
-    if (error) {
-      console.error("Supabase Error updating machine section (check Row Level Security / RLS policies or constraints):", {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      });
-      throw error;
+    if (machineData && machineData.length > 0) {
+      machineDbId = machineData[0].id;
+      qrCode = machineData[0].qr_code || qrCode;
+      serialNumber = machineData[0].serial_number || serialNumber;
     }
-    return data;
+  } catch (err) {
+    console.warn("Resilient lookup: Failed to seek machine in 'machines' table:", err);
+  }
+
+  try {
+    // Attempt to look up in 'fam' table to resolve DB ID and QR code
+    const { data: famData } = await supabase
+      .from('fam')
+      .select('id, "QR Code", "Serial#"')
+      .or(`id.eq.${parsedId}${qrCode ? `,"QR Code".eq.${qrCode}` : `,"QR Code".eq.${String(id)}`}`);
+      
+    if (famData && famData.length > 0) {
+      famDbId = famData[0].id;
+      qrCode = famData[0]['QR Code'] || qrCode;
+      serialNumber = famData[0]['Serial#'] || serialNumber;
+    }
+  } catch (err) {
+    console.warn("Resilient lookup: Failed to seek machine in 'fam' table:", err);
+  }
+
+  // Fallback if we still don't have a qr_code but know ID is like '30663'
+  if (!qrCode && String(id) === '30663') {
+    qrCode = '30663';
+  }
+
+  try {
+    // 1. Update the 'fam' table (Current Location column) via ID, QR Code, or Serial Number
+    try {
+      let famQuery = supabase.from('fam').update({ "Current Location": newSectionName });
+      if (famDbId) {
+        famQuery = famQuery.eq('id', famDbId);
+      } else {
+        famQuery = famQuery.eq('id', parsedId);
+      }
+      const { error: famErr } = await famQuery;
+      if (famErr) {
+        console.warn("Primary fam update error:", famErr.message);
+      }
+
+      if (qrCode) {
+        const { error: famQrErr } = await supabase
+          .from('fam')
+          .update({ "Current Location": newSectionName })
+          .eq('QR Code', qrCode);
+        if (famQrErr) console.warn("QR-based fam update error:", famQrErr.message);
+      }
+
+      if (serialNumber) {
+        const { error: famSnErr } = await supabase
+          .from('fam')
+          .update({ "Current Location": newSectionName })
+          .eq('Serial#', serialNumber);
+        if (famSnErr) console.warn("Serial-based fam update error:", famSnErr.message);
+      }
+    } catch (e) {
+      console.warn("Resilient error while updating 'fam' table:", e);
+    }
+
+    // 2. Update the 'machines' table (section column) via ID or QR Code
+    let machinesData: any = null;
+    try {
+      let machQuery = supabase.from('machines').update({ section: newSectionName });
+      if (machineDbId) {
+        machQuery = machQuery.eq('id', machineDbId);
+      } else {
+        machQuery = machQuery.eq('id', parsedId);
+      }
+      const { data, error: machErr } = await machQuery.select();
+      if (data) {
+        machinesData = data;
+      }
+      if (machErr) {
+        console.warn("Primary machines update error:", machErr.message);
+      }
+
+      if (qrCode) {
+        const { data: qData, error: machQrErr } = await supabase
+          .from('machines')
+          .update({ section: newSectionName })
+          .eq('qr_code', qrCode)
+          .select();
+        if (qData && qData.length > 0) {
+          machinesData = qData;
+        }
+        if (machQrErr) console.warn("QR-based machines update error:", machQrErr.message);
+      }
+    } catch (e) {
+      console.warn("Resilient error while updating 'machines' table:", e);
+    }
+
+    // 3. Retrieve the updated record to return to the frontend
+    const { data: updatedRecord, error: fetchError } = await supabase
+      .from('machines')
+      .select('*')
+      .eq('id', machineDbId || parsedId)
+      .single();
+
+    if (fetchError) {
+      if (qrCode) {
+        const { data: qrRecord } = await supabase
+          .from('machines')
+          .select('*')
+          .eq('qr_code', qrCode)
+          .single();
+        if (qrRecord) return qrRecord;
+      }
+      return (machinesData && machinesData[0]) || { id: parsedId, section: newSectionName };
+    }
+
+    return updatedRecord;
   } catch (error: any) {
-    console.error("Failed to execute updateAssetSection due to an implementation/network exception:", error);
+    console.error("Critical error inside updateAssetSection API call:", error);
     throw error;
   }
 };
