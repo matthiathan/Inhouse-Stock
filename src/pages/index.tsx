@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Machine, Customer, Section } from '../types';
 import { Html5Qrcode } from 'html5-qrcode';
 import { toast } from 'sonner';
-import { getAssetByQR, getSections, updateAssetSection } from '../api/assetApi';
+import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineModels, getNextFADocSequence } from '../api/assetApi';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
@@ -497,6 +497,170 @@ export function AssetsPage() {
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // States for Add Machine Modal
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addForm, setAddForm] = useState({
+    faDocNo: '',
+    assetName: '',
+    assetNo: '',
+    serialNo: '',
+    qrCode: '',
+    machineType: 'Snack',
+    machineModel: '',
+    section: 'Receiving Bay',
+    customerName: '',
+    customerCode: '',
+    buildingName: '',
+    contractType: '',
+    contractNo: '',
+    costAmount: '',
+    navisionFaCode: ''
+  });
+  const [savingNewMachine, setSavingNewMachine] = useState(false);
+
+  // Core business logic state additions:
+  const [assetCategory, setAssetCategory] = useState<'VM' | 'EA' | 'OE'>('VM');
+  const [machineModels, setMachineModels] = useState<string[]>([]);
+  const [nextSequenceNumber, setNextSequenceNumber] = useState<number>(1000);
+
+  // Fetch distinct machine models and FA doc sequence on modal open
+  useEffect(() => {
+    if (isAddModalOpen) {
+      const loadModalData = async () => {
+        try {
+          const [models, seq] = await Promise.all([
+            getMachineModels(),
+            getNextFADocSequence()
+          ]);
+          setMachineModels(models);
+          setNextSequenceNumber(seq);
+          
+          if (models.length > 0) {
+            setAddForm(prev => ({
+              ...prev,
+              machineModel: prev.machineModel || models[0] || '',
+              assetName: prev.assetName || models[0] || ''
+            }));
+          }
+        } catch (e) {
+          console.error("Error loading dropdown data:", e);
+        }
+      };
+      loadModalData();
+    }
+  }, [isAddModalOpen]);
+
+  // Check URL parameters to auto-open and populate the register form
+  useEffect(() => {
+    const action = searchParams.get('action');
+    const qrParam = searchParams.get('qr');
+    if (action === 'add_machine') {
+      setIsAddModalOpen(true);
+      if (qrParam) {
+        setAddForm(prev => ({
+          ...prev,
+          qrCode: decodeURIComponent(qrParam)
+        }));
+      }
+    }
+  }, [searchParams]);
+
+  const handleCloseAddModal = () => {
+    setIsAddModalOpen(false);
+    // Clear form inputs
+    setAddForm({
+      faDocNo: '',
+      assetName: '',
+      assetNo: '',
+      serialNo: '',
+      qrCode: '',
+      machineType: 'Snack',
+      machineModel: '',
+      section: 'Receiving Bay',
+      customerName: '',
+      customerCode: '',
+      buildingName: '',
+      contractType: '',
+      contractNo: '',
+      costAmount: '',
+      navisionFaCode: ''
+    });
+    setAssetCategory('VM');
+
+    // Clear search parameters from the URL
+    if (searchParams.get('action') || searchParams.get('qr')) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('action');
+      newParams.delete('qr');
+      setSearchParams(newParams);
+    }
+  };
+
+  const handleAddMachineSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addForm.assetName || !addForm.serialNo || !addForm.qrCode) {
+      toast.error('Please fill in Name, Serial Number, and QR Code.');
+      return;
+    }
+
+    setSavingNewMachine(true);
+    const dynamicFaDocNo = `FA/${nextSequenceNumber}/${assetCategory}`;
+    try {
+      await addMachine({
+        faDocNo: dynamicFaDocNo,
+        assetName: addForm.assetName,
+        assetNo: assetCategory,
+        serialNo: addForm.serialNo,
+        qrCode: addForm.qrCode,
+        machineType: addForm.machineType,
+        machineModel: addForm.machineModel || null,
+        section: addForm.section,
+        customerName: addForm.customerName || null,
+        customerCode: addForm.customerCode || null,
+        buildingName: addForm.buildingName || null,
+        contractType: addForm.contractType || null,
+        contractNo: addForm.contractNo || null,
+        costAmount: addForm.costAmount || null,
+        navisionFaCode: addForm.navisionFaCode || null
+      });
+
+      // Update local storage so mock / offline cache fallback mode is fully functional and immediate
+      const stored = localStorage.getItem('cached_assets');
+      let allAssets = MOCK_MACHINES;
+      if (stored) {
+        try {
+          allAssets = JSON.parse(stored);
+        } catch (e) {
+          console.warn("Error parsing cache:", e);
+        }
+      }
+
+      const newMachineObj: Machine = {
+        id: 'new-' + Date.now(),
+        asset_name: addForm.assetName,
+        serial_number: addForm.serialNo,
+        qr_code: addForm.qrCode,
+        section: addForm.section
+      };
+
+      allAssets.unshift(newMachineObj);
+      localStorage.setItem('cached_assets', JSON.stringify(allAssets));
+
+      toast.success('Machine added to warehouse');
+      handleCloseAddModal();
+
+      // Trigger automatic list component refresh
+      setRefreshTrigger(prev => prev + 1);
+    } catch (err: any) {
+      toast.error(`Error adding machine: ${err.message || err}`);
+    } finally {
+      setSavingNewMachine(false);
+    }
+  };
 
   // Fetch sections once on mount
   useEffect(() => {
@@ -535,7 +699,7 @@ export function AssetsPage() {
     fetchSections();
   }, []);
 
-  // Fetch assets whenever selectedSection changes
+  // Fetch assets whenever selectedSection or refreshTrigger changes
   useEffect(() => {
     const fetchAssets = async () => {
       setLoading(true);
@@ -587,7 +751,7 @@ export function AssetsPage() {
     };
 
     fetchAssets();
-  }, [selectedSection]);
+  }, [selectedSection, refreshTrigger]);
 
   return (
     <div className="p-4 md:p-8">
@@ -597,24 +761,33 @@ export function AssetsPage() {
           <p className="text-text-secondary">List and manage your enterprise equipment and machinery.</p>
         </div>
 
-        {/* Section Filter with comfortable touch target height */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <label htmlFor="section-filter" className="text-xs font-bold text-text-secondary tracking-wider uppercase whitespace-nowrap">
-            Filter by Section:
-          </label>
-          <select
-            id="section-filter"
-            value={selectedSection}
-            onChange={(e) => setSelectedSection(e.target.value)}
-            className="p-2.5 min-h-[44px] h-11 border border-brand-border rounded-lg bg-bg-elevated text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm cursor-pointer min-w-[200px]"
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          {/* Section Filter with comfortable touch target height */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <label htmlFor="section-filter" className="text-xs font-bold text-text-secondary tracking-wider uppercase whitespace-nowrap">
+              Filter by Section:
+            </label>
+            <select
+              id="section-filter"
+              value={selectedSection}
+              onChange={(e) => setSelectedSection(e.target.value)}
+              className="p-2.5 min-h-[44px] h-11 border border-brand-border rounded-lg bg-bg-elevated text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm cursor-pointer min-w-[200px]"
+            >
+              <option value="">All Sections</option>
+              {sections.map((section) => (
+                <option key={section.id} value={section.section_name}>
+                  {section.section_name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="bg-brand-gold hover:bg-brand-gold/90 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors cursor-pointer min-h-[44px] flex items-center justify-center gap-2 text-sm shadow-sm"
           >
-            <option value="">All Sections</option>
-            {sections.map((section) => (
-              <option key={section.id} value={section.section_name}>
-                {section.section_name}
-              </option>
-            ))}
-          </select>
+            ➕ Add Machine
+          </button>
         </div>
       </header>
 
@@ -686,6 +859,277 @@ export function AssetsPage() {
             </table>
           </div>
         </>
+      )}
+
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl animate-fade-in custom-scrollbar">
+            <h2 className="text-xl font-bold mb-4 text-text-primary">Add New Machine (Fixed Asset Register)</h2>
+            
+            <form onSubmit={handleAddMachineSubmit} className="space-y-6">
+              
+              {/* SECTION: Identifiers */}
+              <div>
+                <h3 className="text-brand-gold text-xs font-bold uppercase tracking-wider mb-3 border-b border-brand-border/40 pb-1">
+                  ⚙️ identifiers
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Asset Name *
+                    </label>
+                    <select
+                      value={addForm.assetName}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, assetName: e.target.value }))}
+                      required
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm cursor-pointer min-h-[44px]"
+                    >
+                      <option value="">-- Select Asset Name --</option>
+                      {machineModels.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Serial Number (S/N) *
+                    </label>
+                    <input 
+                      type="text"
+                      required
+                      placeholder="e.g. DP-8840X"
+                      value={addForm.serialNo}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, serialNo: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary/50 outline-none focus:border-brand-gold text-sm min-h-[44px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      QR Code *
+                    </label>
+                    <input 
+                      type="text"
+                      required
+                      placeholder="e.g. QR-DP-88"
+                      value={addForm.qrCode}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, qrCode: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary/50 outline-none focus:border-brand-gold text-sm min-h-[44px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1 text-gray-400">
+                      FA Doc# (Auto Generated)
+                    </label>
+                    <input 
+                      type="text"
+                      readOnly
+                      value={`FA/${nextSequenceNumber}/${assetCategory}`}
+                      className="w-full p-2.5 h-11 border border-brand-border/40 rounded-lg bg-bg-base/60 text-text-secondary cursor-not-allowed outline-none text-sm min-h-[44px] font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Asset Category (Asset Number) *
+                    </label>
+                    <select
+                      value={assetCategory}
+                      onChange={(e) => setAssetCategory(e.target.value as 'VM' | 'EA' | 'OE')}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm cursor-pointer min-h-[44px]"
+                    >
+                      <option value="VM">VM</option>
+                      <option value="EA">EA</option>
+                      <option value="OE">OE</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION: Hardware Details */}
+              <div>
+                <h3 className="text-brand-gold text-xs font-bold uppercase tracking-wider mb-3 border-b border-brand-border/40 pb-1">
+                  🔧 Hardware Details
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Machine Type *
+                    </label>
+                    <select
+                      value={addForm.machineType}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, machineType: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm cursor-pointer min-h-[44px]"
+                    >
+                      <option value="Snack">Snack</option>
+                      <option value="Coffee(HOT)">Coffee(HOT)</option>
+                      <option value="Beverages(Snack)">Beverages(Snack)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Machine Model
+                    </label>
+                    <select
+                      value={addForm.machineModel}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, machineModel: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm cursor-pointer min-h-[44px]"
+                    >
+                      <option value="">-- Select Model --</option>
+                      {machineModels.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION: Location & Client */}
+              <div>
+                <h3 className="text-brand-gold text-xs font-bold uppercase tracking-wider mb-3 border-b border-brand-border/40 pb-1">
+                  📍 Location & Client
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Initial Section *
+                    </label>
+                    <select 
+                      value={addForm.section} 
+                      onChange={(e) => setAddForm(prev => ({ ...prev, section: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm cursor-pointer min-h-[44px]"
+                    >
+                      {(sections.map(s => s.section_name).includes('Receiving Bay') ? sections : [{ id: 'rb-temp', section_name: 'Receiving Bay' }, ...sections] ).map((sec) => (
+                        <option key={sec.id} value={sec.section_name}>
+                          {sec.section_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Customer Name
+                    </label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. Acme Corp UK"
+                      value={addForm.customerName}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, customerName: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary/50 outline-none focus:border-brand-gold text-sm min-h-[44px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Customer Code (C.Code)
+                    </label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. ACM-09"
+                      value={addForm.customerCode}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, customerCode: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary/50 outline-none focus:border-brand-gold text-sm min-h-[44px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Building Name
+                    </label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. Hangar 5"
+                      value={addForm.buildingName}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, buildingName: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary/50 outline-none focus:border-brand-gold text-sm min-h-[44px]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION: Contract & Financials */}
+              <div>
+                <h3 className="text-brand-gold text-xs font-bold uppercase tracking-wider mb-3 border-b border-brand-border/40 pb-1">
+                  💳 Contract & Financials
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Contract Type
+                    </label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. Lease-to-Own"
+                      value={addForm.contractType}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, contractType: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary/50 outline-none focus:border-brand-gold text-sm min-h-[44px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Contract Number
+                    </label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. CON-8812"
+                      value={addForm.contractNo}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, contractNo: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary/40 outline-none focus:border-brand-gold text-sm min-h-[44px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Cost Amount
+                    </label>
+                    <input 
+                      type="number"
+                      step="any"
+                      placeholder="e.g. 12500"
+                      value={addForm.costAmount}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, costAmount: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary/40 outline-none focus:border-brand-gold text-sm min-h-[44px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Navision FA Code
+                    </label>
+                    <input 
+                      type="text"
+                      placeholder="e.g. NAV-90210"
+                      value={addForm.navisionFaCode}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, navisionFaCode: e.target.value }))}
+                      className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary/40 outline-none focus:border-brand-gold text-sm min-h-[44px]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ACTION BUTTONS */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-brand-border/40">
+                <button 
+                  type="button" 
+                  onClick={handleCloseAddModal}
+                  className="px-6 py-2.5 rounded-lg bg-bg-base hover:bg-bg-base/80 text-text-primary border border-brand-border transition-colors cursor-pointer text-sm font-semibold min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={savingNewMachine}
+                  className="px-6 py-2.5 rounded-lg bg-brand-gold hover:bg-brand-gold/90 text-white transition-colors cursor-pointer text-sm font-semibold disabled:opacity-50 min-h-[44px] flex items-center gap-2"
+                >
+                  {savingNewMachine ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Saving...
+                    </>
+                  ) : 'Save Machine'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -797,20 +1241,11 @@ export function AssetDetailsPage() {
         if (!asset || !selectedSection) return;
         setSaving(true);
         try {
-            const { error } = await supabase
-                .from('machines')
-                .update({ section: selectedSection })
-                .eq('id', asset.id);
-
-            if (error) {
-                console.warn(`Supabase update error: ${error.message}`);
-                updateFallbackAsset();
-            } else {
-                updateCachedAssetMemory();
-                setAsset(prev => prev ? { ...prev, section: selectedSection } : null);
-                toast.success("Section updated successfully!");
-                setIsModalOpen(false);
-            }
+            await updateAssetSection(asset.id, selectedSection);
+            updateCachedAssetMemory();
+            setAsset(prev => prev ? { ...prev, section: selectedSection } : null);
+            toast.success("Section updated successfully!");
+            setIsModalOpen(false);
         } catch (err: any) {
             console.warn('Update location exception:', err);
             updateFallbackAsset();
@@ -1002,10 +1437,12 @@ export function ScannerPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const isProcessingRef = React.useRef(false);
   const [scannedMachine, setScannedMachine] = useState<Machine | null>(null);
+  const [unrecognizedQr, setUnrecognizedQr] = useState<string | null>(null);
   const scannerRef = React.useRef<Html5Qrcode | null>(null);
 
   const handleCancelAndRescan = () => {
     setScannedMachine(null);
+    setUnrecognizedQr(null);
     setIsProcessing(false);
     isProcessingRef.current = false;
     try {
@@ -1051,17 +1488,9 @@ export function ScannerPage() {
 
           let foundMachine: Machine | null = null;
           try {
-            const { data, error } = await supabase
-              .from('machines')
-              .select('*')
-              .eq('qr_code', decodedText)
-              .maybeSingle();
-
-            if (!error && data) {
-              foundMachine = data as Machine;
-            }
+            foundMachine = await getAssetByQR(decodedText) as Machine | null;
           } catch (e) {
-            console.warn("Supabase QR find error:", e);
+            console.warn("API QR find error:", e);
           }
 
           toast.dismiss(loadingToastId);
@@ -1076,7 +1505,9 @@ export function ScannerPage() {
             const stored = localStorage.getItem('cached_assets');
             let all = MOCK_MACHINES;
             if (stored) {
-              all = JSON.parse(stored);
+              try {
+                all = JSON.parse(stored);
+              } catch (_) {}
             }
             const found = all.find(a => a.qr_code === decodedText);
 
@@ -1086,20 +1517,10 @@ export function ScannerPage() {
                 setScannedMachine(found);
               }
             } else {
-              toast.error("Scanned QR Code does not match any registered assets.");
-              setIsProcessing(false);
-              isProcessingRef.current = false;
-              setTimeout(() => {
-                if (isMounted) {
-                  try {
-                    if (html5QrCode.isScanning) {
-                      html5QrCode.resume();
-                    }
-                  } catch (e) {
-                    console.warn("Could not resume scanner:", e);
-                  }
-                }
-              }, 2000);
+              // Show unrecognized modal instead of auto-resuming
+              if (isMounted) {
+                setUnrecognizedQr(decodedText);
+              }
             }
           }
         } catch (err: any) {
@@ -1237,6 +1658,39 @@ export function ScannerPage() {
                 className="w-full bg-transparent hover:bg-red-500/10 text-red-500 font-semibold py-2 px-4 rounded-lg transition-colors cursor-pointer min-h-[36px] text-xs mt-1"
               >
                 Cancel / Rescan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {unrecognizedQr && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl text-center">
+            <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">
+              ⚠️
+            </div>
+            <h2 className="text-lg font-bold text-text-primary mb-1">Unrecognized QR Code</h2>
+            <p className="text-text-secondary text-sm mb-3">
+              Scanned value: <span className="text-text-primary font-mono font-semibold bg-bg-base px-2 py-0.5 rounded border border-brand-border/40 inline-block max-w-full truncate">{unrecognizedQr}</span>
+            </p>
+            <p className="text-text-secondary text-sm mb-5">
+              This machine is not in the system. Would you like to register it?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  navigate(`/assets?action=add_machine&qr=${encodeURIComponent(unrecognizedQr)}`);
+                }}
+                className="w-full bg-brand-gold hover:bg-brand-gold/90 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5"
+              >
+                ➕ Register Machine
+              </button>
+              <button
+                onClick={handleCancelAndRescan}
+                className="w-full bg-bg-base hover:bg-bg-base/80 text-text-primary border border-brand-border font-semibold py-2.5 px-4 rounded-lg transition-colors cursor-pointer min-h-[44px] flex items-center justify-center"
+              >
+                🔄 Rescan
               </button>
             </div>
           </div>
