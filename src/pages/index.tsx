@@ -1001,10 +1001,26 @@ export function ScannerPage() {
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const isProcessingRef = React.useRef(false);
+  const [scannedMachine, setScannedMachine] = useState<Machine | null>(null);
+  const scannerRef = React.useRef<Html5Qrcode | null>(null);
+
+  const handleCancelAndRescan = () => {
+    setScannedMachine(null);
+    setIsProcessing(false);
+    isProcessingRef.current = false;
+    try {
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.resume();
+      }
+    } catch (e) {
+      console.warn("Could not resume scanner:", e);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
     const html5QrCode = new Html5Qrcode("reader");
+    scannerRef.current = html5QrCode;
     let isScanning = false;
 
     const startPromise = html5QrCode.start(
@@ -1033,16 +1049,16 @@ export function ScannerPage() {
           // Add a tiny delay to let the camera pause settle
           await new Promise(resolve => setTimeout(resolve, 300));
 
-          let foundAssetId: string | null = null;
+          let foundMachine: Machine | null = null;
           try {
             const { data, error } = await supabase
               .from('machines')
-              .select('id')
+              .select('*')
               .eq('qr_code', decodedText)
               .maybeSingle();
 
             if (!error && data) {
-              foundAssetId = data.id;
+              foundMachine = data as Machine;
             }
           } catch (e) {
             console.warn("Supabase QR find error:", e);
@@ -1050,20 +1066,11 @@ export function ScannerPage() {
 
           toast.dismiss(loadingToastId);
 
-          if (foundAssetId) {
+          if (foundMachine) {
             toast.success("Asset found!");
-            try {
-              if (html5QrCode.isScanning) {
-                await html5QrCode.stop();
-              }
-            } catch (stopErr) {
-              console.warn("Could not stop camera gracefully before navigating:", stopErr);
+            if (isMounted) {
+              setScannedMachine(foundMachine);
             }
-            setTimeout(() => {
-              if (isMounted) {
-                navigate(`/assets/${foundAssetId}?action=update_section`);
-              }
-            }, 800);
           } else {
             // Check cache & mock
             const stored = localStorage.getItem('cached_assets');
@@ -1075,18 +1082,9 @@ export function ScannerPage() {
 
             if (found) {
               toast.success("Asset found (Local Cache)!");
-              try {
-                if (html5QrCode.isScanning) {
-                  await html5QrCode.stop();
-                }
-              } catch (stopErr) {
-                console.warn("Could not stop camera gracefully before navigating:", stopErr);
+              if (isMounted) {
+                setScannedMachine(found);
               }
-              setTimeout(() => {
-                if (isMounted) {
-                  navigate(`/assets/${found.id}?action=update_section`);
-                }
-              }, 800);
             } else {
               toast.error("Scanned QR Code does not match any registered assets.");
               setIsProcessing(false);
@@ -1172,7 +1170,7 @@ export function ScannerPage() {
         ) : (
           <div className="relative overflow-hidden rounded-lg w-full h-[60vh] md:h-96">
             {/* Viewfinder overlay */}
-            <div className={`absolute inset-0 border-2 border-brand-gold/10 pointer-events-none rounded-lg z-10 flex items-center justify-center transition-opacity duration-300 ${isProcessing ? 'opacity-0' : 'opacity-100'}`}>
+            <div className={`absolute inset-0 border-2 border-brand-gold/10 pointer-events-none rounded-lg z-10 flex items-center justify-center transition-opacity duration-300 ${isProcessing && !scannedMachine ? 'opacity-0' : 'opacity-100'}`}>
               <div className="w-[200px] h-[200px] sm:w-[240px] sm:h-[240px] border-2 border-dashed border-brand-gold relative flex items-center justify-center rounded-lg">
                 <span className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-brand-gold -mt-0.5 -ml-0.5 rounded-tl"></span>
                 <span className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-brand-gold -mt-0.5 -mr-0.5 rounded-tr"></span>
@@ -1185,11 +1183,11 @@ export function ScannerPage() {
             </div>
 
             {/* html5-qrcode element */}
-            <div className={`transition-opacity duration-300 h-full w-full ${isProcessing ? 'opacity-0' : 'opacity-100'}`}>
+            <div className={`transition-opacity duration-300 h-full w-full ${isProcessing && !scannedMachine ? 'opacity-0' : 'opacity-100'}`}>
               <div id="reader" className="overflow-hidden rounded-lg bg-black w-full h-full [&_video]:object-cover [&_video]:w-full [&_video]:h-full [&_video]:min-h-full"></div>
             </div>
             
-            {isProcessing && (
+            {isProcessing && !scannedMachine && (
               <div className="absolute inset-0 bg-bg-elevated/90 backdrop-blur-sm flex items-center justify-center z-20 rounded-lg">
                 <div className="text-center p-4">
                   <div className="w-10 h-10 border-4 border-brand-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -1200,6 +1198,50 @@ export function ScannerPage() {
           </div>
         )}
       </div>
+
+      {scannedMachine && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl text-center">
+            <div className="w-12 h-12 bg-brand-gold/10 text-brand-gold rounded-full flex items-center justify-center mx-auto mb-4 text-xl">
+              ⚙️
+            </div>
+            <h2 className="text-lg font-bold text-text-primary mb-1">Machine Found</h2>
+            <p className="text-brand-gold font-bold text-lg mb-2">{scannedMachine.asset_name}</p>
+            <div className="text-left bg-bg-base/50 p-3 rounded-lg border border-brand-border/40 text-xs text-text-secondary font-mono space-y-1 mb-4">
+              <p>S/N: <span className="text-text-primary font-semibold">{scannedMachine.serial_number}</span></p>
+              <p>QR Code: <span className="text-text-primary font-semibold">{scannedMachine.qr_code}</span></p>
+              <p>Current Section: <span className="text-text-primary font-semibold">{scannedMachine.section || 'N/A'}</span></p>
+            </div>
+            <p className="text-text-secondary text-sm mb-4">
+              Would you like to update the section for this machine?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  navigate(`/assets/${scannedMachine.id}?action=update_section`);
+                }}
+                className="w-full bg-brand-gold hover:bg-brand-gold/90 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors cursor-pointer min-h-[44px] flex items-center justify-center"
+              >
+                🔄 Update Section
+              </button>
+              <button
+                onClick={() => {
+                  navigate(`/assets/${scannedMachine.id}`);
+                }}
+                className="w-full bg-bg-base hover:bg-bg-base/80 text-text-primary border border-brand-border font-semibold py-2.5 px-4 rounded-lg transition-colors cursor-pointer min-h-[44px] flex items-center justify-center"
+              >
+                👁️ View Details
+              </button>
+              <button
+                onClick={handleCancelAndRescan}
+                className="w-full bg-transparent hover:bg-red-500/10 text-red-500 font-semibold py-2 px-4 rounded-lg transition-colors cursor-pointer min-h-[36px] text-xs mt-1"
+              >
+                Cancel / Rescan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
