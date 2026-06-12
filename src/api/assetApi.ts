@@ -5,49 +5,33 @@ export const getAssetByQR = async (qr: string) => {
     .from('machines')
     .select('*')
     .eq('qr_code', qr)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Error fetching machine by QR:", error);
-    throw error;
-  }
+    .single();
+    
+  if (error) throw error;
   return data;
 };
 
 export const getSections = async () => {
   const { data, error } = await supabase
     .from('section')
-    .select('*')
+    .select('id, section_name')
     .order('section_name', { ascending: true });
-
-  if (error) {
-    console.error("Error fetching sections:", error);
-    throw error;
-  }
+    
+  if (error) throw error;
   return data;
 };
 
-export async function updateAssetSection(machineId: string, newSection: string) {
-  try {
-    // 1. We MUST target the 'machines' table, and update the 'section' column
-    const { data, error } = await supabase
-      .from('machines')
-      .update({ section: newSection })
-      .eq('id', machineId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Supabase Update Error:', error.message);
-      throw error;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Failed to update machine section:', error);
-    throw error;
-  }
-}
+export const updateAssetSection = async (id: string, newSectionName: string) => {
+  const { data, error } = await supabase
+    .from('machines')
+    .update({ section: newSectionName })
+    .eq('id', id)
+    .select()
+    .single();
+    
+  if (error) throw error;
+  return data;
+};
 
 export interface ComprehensiveMachineData {
   faDocNo?: string;
@@ -57,9 +41,9 @@ export interface ComprehensiveMachineData {
   qrCode: string;
   machineType?: string;
   machineModel?: string;
-  section: string; // matches Current Location
+  section: string;
   customerName?: string;
-  customerCode?: string; // C.Code
+  customerCode?: string;
   buildingName?: string;
   contractType?: string;
   contractNo?: string;
@@ -150,5 +134,3 @@ export const getNextFADocSequence = async (): Promise<number> => {
 
   return maxSeq + 1;
 };
-
-
