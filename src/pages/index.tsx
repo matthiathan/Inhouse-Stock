@@ -1397,31 +1397,41 @@ export function ScannerPage() {
 
   useEffect(() => {
     let isMounted = true;
-    const html5QrCode = new Html5Qrcode("reader", {
-      verbose: false,
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.QR_CODE,
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39
-      ]
-    });
+    const html5QrCode = new Html5Qrcode("reader");
     scannerRef.current = html5QrCode;
     let isScanning = false;
 
+    // Detect if device is mobile to size scanning box appropriately
+    const isMobile = window.innerWidth < 768;
+    
+    // Exactly 1 key constraint to satisfy the html5-qrcode cameraIdOrConfig validator checks
+    const cameraConstraints = {
+      facingMode: "environment"
+    };
+
     const config = {
-      fps: 10,
-      qrbox: { width: 250, height: 150 }, // Barcodes are wider than QR
+      fps: 20, // Elevated frame rate for near-instant detection
+      qrbox: isMobile 
+        ? { width: 280, height: 120 } 
+        : { width: 420, height: 180 }, // Rectangular layout accommodates wide 1D barcodes and square QR codes
       formatsToSupport: [
         Html5QrcodeSupportedFormats.QR_CODE,
         Html5QrcodeSupportedFormats.EAN_13,
         Html5QrcodeSupportedFormats.CODE_128,
         Html5QrcodeSupportedFormats.CODE_39
-      ]
+      ],
+      videoConstraints: {
+        facingMode: "environment",
+        focusMode: "continuous",
+        advanced: [{ focusMode: "continuous" }] as any[]
+      },
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true // Leverages native OS/Hardware processing if supported
+      }
     };
 
     const startPromise = html5QrCode.start(
-      { facingMode: "environment" },
+      cameraConstraints,
       config,
       async (decodedText) => {
         if (isProcessingRef.current) return;
@@ -1437,7 +1447,7 @@ export function ScannerPage() {
             }
           }
 
-          // 1. Try Machine Table
+          // 1. Try Machine Table (QR Codes)
           const machine = await getAssetByQR(decodedText);
           if (machine) {
             toast.success("Asset found!");
@@ -1448,7 +1458,7 @@ export function ScannerPage() {
             return;
           }
 
-          // 2. Try Stock Table
+          // 2. Try Stock Table (Linear Barcodes)
           const stockItem = await getStockByBarcode(decodedText);
           if (stockItem) {
             toast.success("Stock item found!");
@@ -1515,8 +1525,8 @@ export function ScannerPage() {
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto">
       <header className="mb-8">
-        <h1 className="text-2xl font-bold text-text-primary font-sans">QR Code Scanner</h1>
-        <p className="text-text-secondary text-sm">Scan a physical machinery or equipment asset QR label to query its details.</p>
+        <h1 className="text-2xl font-bold text-text-primary font-sans">Barcode & QR Scanner</h1>
+        <p className="text-text-secondary text-sm">Scan asset QR codes or inventory barcodes to query details.</p>
       </header>
 
       <div className="bg-bg-elevated p-4 md:p-6 rounded-xl border border-brand-border md:max-w-md md:mx-auto shadow-sm">
@@ -1529,14 +1539,14 @@ export function ScannerPage() {
           <div className="relative overflow-hidden rounded-lg w-full h-[60vh] md:h-96">
             {/* Viewfinder overlay */}
             <div className={`absolute inset-0 border-2 border-brand-gold/10 pointer-events-none rounded-lg z-10 flex items-center justify-center transition-opacity duration-300 ${isProcessing && !scannedMachine ? 'opacity-0' : 'opacity-100'}`}>
-              <div className="w-[200px] h-[200px] sm:w-[240px] sm:h-[240px] border-2 border-dashed border-brand-gold relative flex items-center justify-center rounded-lg">
+              <div className="w-[220px] h-[120px] sm:w-[280px] sm:h-[150px] border-2 border-dashed border-brand-gold relative flex items-center justify-center rounded-lg">
                 <span className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-brand-gold -mt-0.5 -ml-0.5 rounded-tl"></span>
                 <span className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-brand-gold -mt-0.5 -mr-0.5 rounded-tr"></span>
                 <span className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-brand-gold -mb-0.5 -ml-0.5 rounded-bl"></span>
                 <span className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-brand-gold -mb-0.5 -mr-0.5 rounded-br"></span>
                 
                 {/* Laser animation */}
-                <div className="w-[180px] sm:w-[220px] h-0.5 bg-brand-gold absolute animate-bounce opacity-70"></div>
+                <div className="w-[200px] sm:w-[260px] h-0.5 bg-brand-gold absolute animate-bounce opacity-70"></div>
               </div>
             </div>
 
@@ -1549,7 +1559,7 @@ export function ScannerPage() {
               <div className="absolute inset-0 bg-bg-elevated/90 backdrop-blur-sm flex items-center justify-center z-20 rounded-lg">
                 <div className="text-center p-4">
                   <div className="w-10 h-10 border-4 border-brand-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-text-primary font-medium animate-pulse">Freezing camera...</p>
+                  <p className="text-text-primary font-medium animate-pulse">Loading item details...</p>
                 </div>
               </div>
             )}
@@ -1607,12 +1617,12 @@ export function ScannerPage() {
             <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">
               ⚠️
             </div>
-            <h2 className="text-lg font-bold text-text-primary mb-1">Unrecognized QR Code</h2>
+            <h2 className="text-lg font-bold text-text-primary mb-1">Unrecognized Code</h2>
             <p className="text-text-secondary text-sm mb-3">
               Scanned value: <span className="text-text-primary font-mono font-semibold bg-bg-base px-2 py-0.5 rounded border border-brand-border/40 inline-block max-w-full truncate">{unrecognizedQr}</span>
             </p>
             <p className="text-text-secondary text-sm mb-5">
-              This machine is not in the system. Would you like to register it?
+              This item is not in the system. Would you like to register it?
             </p>
             <div className="flex flex-col gap-2">
               <button
@@ -1621,7 +1631,7 @@ export function ScannerPage() {
                 }}
                 className="w-full bg-brand-gold hover:bg-brand-gold/90 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors cursor-pointer min-h-[44px] flex items-center justify-center gap-1.5"
               >
-                ➕ Register Machine
+                ➕ Register Asset
               </button>
               <button
                 onClick={handleCancelAndRescan}
