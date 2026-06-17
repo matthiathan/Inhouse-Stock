@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { receiveStockSchema, ReceiveStockSchema } from '../lib/schemas';
 import { Machine, Customer, Section } from '../types';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { toast } from 'sonner';
@@ -24,31 +27,22 @@ export function StockPage() {
   const [dispatching, setDispatching] = useState(false);
   const [detectedTable, setDetectedTable] = useState<'stock' | 'inventory' | 'local'>('local');
 
-  // Form states
-  const [formItem, setFormItem] = useState('');
-  const [formBarcode, setFormBarcode] = useState('');
-  const [formPalletQty, setFormPalletQty] = useState('');
-  const [formBoxes, setFormBoxes] = useState('');
-  const [formUnitsPerBox, setFormUnitsPerBox] = useState('');
-  const [formNotes, setFormNotes] = useState('');
-  const [saving, setSaving] = useState(false);
+  // Form states (deprecated in favor of react-hook-form)
+  const { register, handleSubmit, reset, setValue, watch } = useForm<ReceiveStockSchema>({
+    resolver: zodResolver(receiveStockSchema),
+    defaultValues: {
+        item: '', barcode: '', palletQty: 0, boxes: 0, unitsPerBox: 12, notes: ''
+    }
+  });
 
+  const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchParams] = useSearchParams();
-
-  const resetForm = () => {
-    setFormItem('');
-    setFormBarcode('');
-    setFormPalletQty('');
-    setFormBoxes('');
-    setFormUnitsPerBox('');
-    setFormNotes('');
-  };
 
   useEffect(() => {
     const barcodeParam = searchParams.get('barcode');
     if (barcodeParam) {
-      setFormBarcode(barcodeParam);
+      setValue('barcode', barcodeParam);
       // Try to find a matching item in the loaded stockItems
       const matched = stockItems.find(item => {
         const itemBarcode = item.barcode;
@@ -57,18 +51,18 @@ export function StockPage() {
       });
 
       if (matched) {
-        setFormItem(matched.item_name || '');
-        setFormUnitsPerBox(String(matched.units_per_box ?? '12'));
-        setFormPalletQty(String(matched.pallet_quantity ?? '0'));
-        setFormBoxes(String(matched.box_quantity ?? '0'));
-        setFormNotes(matched.notes || '');
+        setValue('item', matched.item_name || '');
+        setValue('unitsPerBox', matched.units_per_box ?? 12);
+        setValue('palletQty', matched.pallet_quantity ?? 0);
+        setValue('boxes', matched.box_quantity ?? 0);
+        setValue('notes', matched.notes || '');
       } else {
         // Safe defaults for brand new item
-        setFormItem('');
-        setFormPalletQty('0');
-        setFormBoxes('0');
-        setFormUnitsPerBox('12');
-        setFormNotes('');
+        setValue('item', '');
+        setValue('palletQty', 0);
+        setValue('boxes', 0);
+        setValue('unitsPerBox', 12);
+        setValue('notes', '');
       }
       setIsModalOpen(true);
     }
@@ -138,31 +132,26 @@ export function StockPage() {
     return item.notes || 'No notes';
   };
 
-  const handleReceiveSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formItem.trim() || !formBarcode.trim() || !formPalletQty || !formBoxes || !formUnitsPerBox) {
-      toast.error("Please fill in all required fields.");
-      return;
-    }
-
+  const handleReceiveSubmit = async (data: ReceiveStockSchema) => {
     setSaving(true);
-    const palletQty = parseInt(formPalletQty, 10);
-    const boxQty = parseInt(formBoxes, 10);
-    const unitsPerBox = parseInt(formUnitsPerBox, 10);
+    const palletQty = data.palletQty;
+    const boxQty = data.boxes;
+    const unitsPerBox = data.unitsPerBox;
     const calculatedTotalUnits = (palletQty * 48 * unitsPerBox) + (boxQty * unitsPerBox);
     const generatedSku = `SKU-${Math.floor(10000 + Math.random() * 90000)}`;
 
     if (detectedTable !== 'local') {
       try {
         const insertData = {
-          item_name: formItem,
+          item_name: data.item,
           quantity: calculatedTotalUnits,
-          notes: formNotes,
+          notes: data.notes || '',
           sku: generatedSku,
-          barcode: formBarcode,
+          barcode: data.barcode,
           pallet_quantity: palletQty,
           box_quantity: boxQty,
-          units_per_box: unitsPerBox
+          units_per_box: unitsPerBox,
+          image_url: data.imageUrl
         };
 
         const { error } = await supabase
@@ -173,7 +162,7 @@ export function StockPage() {
         
         toast.success("Stock received successfully!");
         setIsModalOpen(false);
-        resetForm();
+        reset();
 
         // Refresh
         const { data: refreshed } = await supabase
@@ -192,11 +181,11 @@ export function StockPage() {
       const newId = stockItems.length > 0 ? Math.max(...stockItems.map(i => Number(i.id))) + 1 : 1;
       const newItem = {
         id: newId,
-        item_name: formItem,
+        item_name: data.item,
         sku: generatedSku,
         quantity: calculatedTotalUnits,
-        notes: formNotes,
-        barcode: formBarcode,
+        notes: data.notes || '',
+        barcode: data.barcode,
         pallet_quantity: palletQty,
         box_quantity: boxQty,
         units_per_box: unitsPerBox
@@ -206,7 +195,7 @@ export function StockPage() {
       setStockItems(updated);
       toast.success("Stock received!");
       setIsModalOpen(false);
-      resetForm();
+      reset();
       setSaving(false);
     }
   };
@@ -256,6 +245,32 @@ export function StockPage() {
     }
   };
 
+  const handleDeleteStock = async (item: any) => {
+    if (!window.confirm("Are you sure you want to delete this stock item?")) return;
+    
+    try {
+        const { error } = await supabase
+          .from(detectedTable === 'stock' ? 'stock' : 'inventory')
+          .delete()
+          .eq('id', item.id);
+        
+        if (error) throw error;
+        
+        toast.success("Stock deleted successfully!");
+
+        // Refresh
+        const { data: refreshed } = await supabase
+          .from(detectedTable === 'stock' ? 'stock' : 'inventory')
+          .select('*')
+          .order('id', { ascending: false });
+        if (refreshed) {
+          setStockItems(refreshed);
+        }
+    } catch (err: any) {
+        toast.error(err.message || "Error deleting stock");
+    }
+  };
+
   const filteredItems = stockItems.filter(item => {
     const name = getItemName(item).toLowerCase();
     const sku = getSKU(item).toLowerCase();
@@ -272,7 +287,7 @@ export function StockPage() {
           <p className="text-text-secondary">Manage and track your stock levels across departments.</p>
         </div>
         <button 
-          onClick={() => { resetForm(); setIsModalOpen(true); }}
+          onClick={() => { reset(); setIsModalOpen(true); }}
           className="bg-brand-gold text-white px-5 py-2.5 min-h-[44px] rounded-lg font-medium hover:bg-brand-gold/90 transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer whitespace-nowrap self-start sm:self-auto"
         >
           <span className="text-lg font-bold">+</span> Receive Stock
@@ -350,6 +365,9 @@ export function StockPage() {
                     }`}>
                       {qty} units
                     </span>
+                    {(role === 'admin' || role === 'ops_manager') && (
+                      <button onClick={() => handleDeleteStock(item)} className="bg-red-900/20 text-red-500 px-2 py-1 rounded text-xs font-semibold cursor-pointer shrink-0">Delete</button>
+                    )}
                   </div>
 
                   <div className="border-t border-brand-border/60 pt-2.5 flex flex-col gap-1">
@@ -416,8 +434,11 @@ export function StockPage() {
                           )}
                         </div>
                       </td>
-                      <td className="p-4 text-right">
+                      <td className="p-4 text-right flex items-center justify-end gap-2">
                         <button onClick={() => { setDispatchItem(item); setIsDispatchModalOpen(true); }} className="bg-brand-gold hover:bg-brand-gold/90 text-white text-xs px-2.5 py-1.5 rounded cursor-pointer">Dispatch</button>
+                        {(role === 'admin' || role === 'ops_manager') && (
+                            <button onClick={() => handleDeleteStock(item)} className="bg-red-900/20 text-red-500 hover:bg-red-900/30 text-xs px-2.5 py-1.5 rounded cursor-pointer">Delete</button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -501,15 +522,13 @@ export function StockPage() {
               <p className="text-xs text-text-secondary">Add new parts or equipment shipments to inventory.</p>
             </header>
             
-            <form onSubmit={handleReceiveSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit(handleReceiveSubmit)} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1">Item Description / Name *</label>
                 <input 
                   type="text" 
-                  required
+                  {...register('item')}
                   placeholder="e.g. Compression Valve 12mm"
-                  value={formItem} 
-                  onChange={(e) => setFormItem(e.target.value)}
                   className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
                 />
               </div>
@@ -519,10 +538,8 @@ export function StockPage() {
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Barcode *</label>
                   <input 
                     type="text" 
-                    required
+                    {...register('barcode')}
                     placeholder="e.g. BAR-1234"
-                    value={formBarcode} 
-                    onChange={(e) => setFormBarcode(e.target.value)}
                     className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
                   />
                 </div>
@@ -531,11 +548,9 @@ export function StockPage() {
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Pallet Quantity *</label>
                   <input 
                     type="number" 
-                    required
+                    {...register('palletQty', { valueAsNumber: true })}
                     min="0"
                     placeholder="e.g. 2"
-                    value={formPalletQty} 
-                    onChange={(e) => setFormPalletQty(e.target.value)}
                     className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
                   />
                 </div>
@@ -546,11 +561,9 @@ export function StockPage() {
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Boxes (Loose) *</label>
                   <input 
                     type="number" 
-                    required
+                    {...register('boxes', { valueAsNumber: true })}
                     min="0"
                     placeholder="e.g. 5"
-                    value={formBoxes} 
-                    onChange={(e) => setFormBoxes(e.target.value)}
                     className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
                   />
                 </div>
@@ -559,11 +572,9 @@ export function StockPage() {
                   <label className="block text-xs font-semibold text-text-secondary mb-1">Units/Box *</label>
                   <input 
                     type="number" 
-                    required
+                    {...register('unitsPerBox', { valueAsNumber: true })}
                     min="1"
                     placeholder="e.g. 10"
-                    value={formUnitsPerBox} 
-                    onChange={(e) => setFormUnitsPerBox(e.target.value)}
                     className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
                   />
                 </div>
@@ -574,9 +585,9 @@ export function StockPage() {
                   <span className="text-xs font-semibold text-text-secondary">Calculated Total Units</span>
                   <span className="text-sm font-bold text-brand-gold">
                     {(() => {
-                      const pQty = Number(formPalletQty || 0);
-                      const bQty = Number(formBoxes || 0);
-                      const uBox = Number(formUnitsPerBox || 0);
+                      const pQty = watch('palletQty') || 0;
+                      const bQty = watch('boxes') || 0;
+                      const uBox = watch('unitsPerBox') || 0;
                       return (pQty * 48 * uBox) + (bQty * uBox);
                     })()} units
                   </span>
@@ -584,12 +595,38 @@ export function StockPage() {
               </div>
 
               <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">Stock Image (URL or Capture)</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="url" 
+                    {...register('imageUrl')}
+                    placeholder="https://example.com/image.jpg"
+                    className="flex-grow p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm"
+                  />
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    capture="environment" 
+                    className="hidden" 
+                    id="camera-input"
+                    onChange={(e) => {
+                       if (e.target.files && e.target.files[0]) {
+                           alert("Picture captured! Note: Direct uploading to image storage is not implemented, please manually provide a hosted image URL.");
+                       }
+                    }} 
+                  />
+                  <label htmlFor="camera-input" className="cursor-pointer bg-brand-gold text-white px-3 py-2.5 rounded-lg flex items-center justify-center hover:bg-brand-gold/90 transition-colors">
+                      📸
+                  </label>
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1">Notes / Supplier Details</label>
                 <textarea 
                   rows={3}
+                  {...register('notes')}
                   placeholder="Specify department assignment, batch code or supplier reference..."
-                  value={formNotes} 
-                  onChange={(e) => setFormNotes(e.target.value)}
                   className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm resize-none"
                 />
               </div>

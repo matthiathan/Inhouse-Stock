@@ -48,4 +48,5 @@ export interface StockItem {
   notes: string;
   quantity: number;
   sku: string;
+  image_url?: string;
 }
