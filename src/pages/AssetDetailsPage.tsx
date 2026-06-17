@@ -44,9 +44,8 @@ export function AssetDetailsPage() {
     const [submittingResolution, setSubmittingResolution] = useState(false);
     const [qrVerified, setQrVerified] = useState(false);
     const [scannedQr, setScannedQr] = useState<string | null>(null);
-    const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+    const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [isScanning, setIsScanning] = useState(false);
-    const [uploadingImage, setUploadingImage] = useState(false);
     
     const [sections, setSections] = useState<Section[]>([]);
     const [selectedSection, setSelectedSection] = useState('');
@@ -116,13 +115,13 @@ export function AssetDetailsPage() {
     // Close ticket handler (Technicians / Techs)
     const handleResolveTicket = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedTicketId || !resolutionNotes.trim() || !qrVerified || !photoUrl) return;
+        if (!selectedTicketId || !resolutionNotes.trim() || !qrVerified || !photoFile) return;
         setSubmittingResolution(true);
         try {
-            await closeMaintenanceTicket(selectedTicketId, resolutionNotes, photoUrl);
+            await closeMaintenanceTicket(selectedTicketId, resolutionNotes, photoFile);
             toast.success("Service ticket resolved/closed successfully");
             setResolutionNotes('');
-            setPhotoUrl(null);
+            setPhotoFile(null);
             setQrVerified(false);
             setScannedQr(null);
             setSelectedTicketId(null);
@@ -331,10 +330,10 @@ export function AssetDetailsPage() {
                                     } else {
                                         toast.error("Verification Failed: Scanned QR does not match this asset");
                                     }
-                                }, (err) => {
+                                }, (err: any) => {
                                     if (typeof err === 'string' && (err.includes("NotFoundException") || err.includes("No MultiFormat Readers"))) return;
                                     console.error(err);
-                                    if (err?.name === 'NotAllowedError') {
+                                    if (typeof err !== 'string' && err?.name === 'NotAllowedError') {
                                         toast.error("Camera permission denied. Please allow camera access in your browser settings.");
                                     } else {
                                         toast.error("Error accessing camera. Please try again.");
@@ -349,32 +348,22 @@ export function AssetDetailsPage() {
                     {qrVerified && (
                          <div className="space-y-2">
                              <label className="block text-xs font-semibold text-text-secondary">📸 Photo Evidence *</label>
-                             <input type="file" accept="image/*" capture="environment" onChange={async (e) => {
+                             <input type="file" accept="image/*" capture="environment" onChange={(e) => {
                                  if(!e.target.files || e.target.files.length === 0) return;
-                                 setUploadingImage(true);
-                                 const file = e.target.files[0];
-                                 const filePath = `tickets/${selectedTicketId}_${Date.now()}.jpg`;
-                                 const { error } = await supabase.storage.from('ticket-evidence').upload(filePath, file);
-                                 if(error) { toast.error("Upload failed"); setUploadingImage(false); }
-                                 else {
-                                     const { data } = supabase.storage.from('ticket-evidence').getPublicUrl(filePath);
-                                     setPhotoUrl(data.publicUrl);
-                                     setUploadingImage(false);
-                                 }
+                                 setPhotoFile(e.target.files[0]);
                              }} className="w-full text-sm text-text-secondary border border-brand-border rounded-lg p-2" />
-                             {uploadingImage && <p className="text-xs text-brand-gold">Uploading photo...</p>}
-                             {photoUrl && (
+                             {photoFile && (
                                 <div className="mt-2 border border-brand-border p-2 rounded-lg bg-bg-base/50">
-                                    <p className="text-xs text-emerald-500 font-bold mb-1">📷 Photo Captured</p>
-                                    <img src={photoUrl} className="h-20 w-full object-cover rounded" alt="Evidence" />
+                                    <p className="text-xs text-emerald-500 font-bold mb-1">📷 Photo Selected</p>
+                                    <img src={URL.createObjectURL(photoFile)} className="h-20 w-full object-cover rounded" alt="Evidence" />
                                 </div>
                              )}
                          </div>
                     )}
 
                     <div className="flex justify-end gap-2 pt-2">
-                      <button type="button" onClick={() => { setIsResolveModalOpen(false); setSelectedTicketId(null); setQrVerified(false); setPhotoUrl(null); }} className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-base rounded-lg transition-colors cursor-pointer min-h-[44px]">Cancel</button>
-                      <button type="submit" disabled={submittingResolution || uploadingImage || !qrVerified || !photoUrl} className="bg-emerald-600 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors flex items-center justify-center min-h-[44px] cursor-pointer">
+                      <button type="button" onClick={() => { setIsResolveModalOpen(false); setSelectedTicketId(null); setQrVerified(false); setPhotoFile(null); }} className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-base rounded-lg transition-colors cursor-pointer min-h-[44px]">Cancel</button>
+                      <button type="submit" disabled={submittingResolution || !qrVerified || !photoFile} className="bg-emerald-600 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors flex items-center justify-center min-h-[44px] cursor-pointer">
                         {submittingResolution ? 'Saving...' : 'Resolve Ticket'}
                       </button>
                     </div>

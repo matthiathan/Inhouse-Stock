@@ -1,10 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { Package, Database, QrCode, Settings, BarChart3 } from 'lucide-react';
+import { Package, Database, QrCode, Settings, BarChart3, LogOut } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function DashboardLayout() {
-  const { role } = useAuth();
+  const { role, logout } = useAuth();
   
   const userRole = role || 'user';
 
@@ -48,6 +48,13 @@ export default function DashboardLayout() {
             <span className="text-[10px] tracking-wide font-medium">{item.name}</span>
           </NavLink>
         ))}
+        <button
+          onClick={logout}
+          className="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 gap-1 text-center min-h-[44px] min-w-[64px] text-text-secondary hover:text-red-500"
+        >
+          <LogOut size={20} />
+          <span className="text-[10px] tracking-wide font-medium">Log Out</span>
+        </button>
       </nav>
     </div>
   );

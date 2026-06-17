@@ -8,12 +8,12 @@ export interface Machine {
 
 export interface Customer {
   id: string;
-  'A/C Code': string;
-  'Customer Name': string;
-  'Telephone-1': string;
-  'Email-1': string;
-  'Ship To': string;
-  [key: string]: any;
+  ac_code: string;
+  customer_name: string;
+  telephone: string;
+  email: string;
+  ship_to: string;
+  region: string;
 }
 
 export interface Section {
@@ -29,6 +29,15 @@ export interface Order {
   created_at: string;
   completed_at?: string;
 }
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  stock_barcode: string;
+  required_quantity: number;
+  scanned_quantity: number;
+  is_fulfilled: boolean;
+}
+
 export interface StockItem {
   id: string;
   barcode: string;

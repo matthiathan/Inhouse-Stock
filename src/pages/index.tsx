@@ -232,7 +232,7 @@ export function StockPage() {
 
     setDispatching(true);
     try {
-        await deductStockQuantity(dispatchItem.barcode, palletsToDispatch, boxesToDispatch, unitsToDispatch);
+        await deductStockQuantity(dispatchItem.barcode, totalDeduction);
         toast.success("Stock dispatched successfully!");
         
         // Refresh
@@ -1282,10 +1282,29 @@ export function ScannerPage() {
   const navigate = useNavigate();
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const isProcessingRef = React.useRef(false);
   const [scannedMachine, setScannedMachine] = useState<Machine | null>(null);
   const [unrecognizedQr, setUnrecognizedQr] = useState<string | null>(null);
   const scannerRef = React.useRef<Html5Qrcode | null>(null);
+
+  const toggleTorch = async () => {
+    if (scannerRef.current) {
+        try {
+            const capabilities = scannerRef.current.getRunningTrackCapabilities();
+            if (capabilities && (capabilities as any).torch) {
+                await (scannerRef.current as any).applyVideoConstraints({ advanced: [{ torch: !torchOn }] });
+                setTorchOn(!torchOn);
+                toast.info(`Flashlight ${!torchOn ? 'on' : 'off'}`);
+            } else {
+                toast.error("Flashlight not supported on this device.");
+            }
+        } catch (e) {
+            console.error("Torch error:", e);
+            toast.error("Could not toggle flashlight.");
+        }
+    }
+  };
 
   const Maps = navigate;
 
@@ -1447,9 +1466,17 @@ export function ScannerPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto">
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold text-text-primary font-sans">Barcode & QR Scanner</h1>
-        <p className="text-text-secondary text-sm">Scan asset QR codes or inventory barcodes to query details.</p>
+      <header className="mb-8 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary font-sans">Barcode & QR Scanner</h1>
+          <p className="text-text-secondary text-sm">Scan asset QR codes or inventory barcodes to query details.</p>
+        </div>
+        <button 
+            onClick={toggleTorch}
+            className={`p-2 rounded-full ${torchOn ? 'bg-yellow-500' : 'bg-gray-200'}`}
+        >
+            Flashlight
+        </button>
       </header>
 
       <div className="bg-bg-elevated p-4 md:p-6 rounded-xl border border-brand-border md:max-w-md md:mx-auto shadow-sm">

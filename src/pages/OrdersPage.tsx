@@ -157,7 +157,20 @@ export function OrdersPage() {
   const completeOrder = async () => {
     if (!activeOrder) return;
     
-    if (!window.confirm("Are you sure you want to complete this order?")) return;
+    if (!window.confirm("Are you sure you want to complete this order? (Partial shortages will be logged)")) return;
+    
+    // Deduct stock for all items based on what was *actually* scanned
+    const itemsToProcess = orderItems.filter(i => i.order_id === activeOrder.id);
+    
+    for (const item of itemsToProcess) {
+        if (item.scanned_quantity < item.required_quantity) {
+            toast.warning(`Shortage detected for ${item.stock_barcode}: Required ${item.required_quantity}, Scanned ${item.scanned_quantity}`);
+        }
+        
+        if (item.scanned_quantity > 0) {
+            await deductStockQuantity(item.stock_barcode, item.scanned_quantity);
+        }
+    }
     
     // Update order
     await supabase.from('orders').update({
@@ -165,12 +178,7 @@ export function OrdersPage() {
         completed_at: new Date().toISOString()
     }).eq('id', activeOrder.id);
 
-    // Deduct stock for all items
-    for (const item of orderItems.filter(i => i.order_id === activeOrder.id)) {
-        await deductStockQuantity(item.stock_barcode, 0, 0, item.required_quantity);
-    }
-
-    toast.success("Order completed and stock deducted!");
+    toast.success("Order completed with processed stock deductions!");
     setIsScannerOpen(false);
     fetchOrders();
   };
