@@ -1,0 +1,144 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Html5QrcodeScanner } from 'html5-qrcode';
+import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
+import { Camera, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+
+export default function SCLTechClosurePage() {
+  const { sclId } = useParams<{ sclId: string }>();
+  const navigate = useNavigate();
+  const [step, setStep] = useState(1);
+  const [scannedMachine, setScannedMachine] = useState<any>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [notes, setNotes] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+
+  useEffect(() => {
+    if (step === 1) {
+      const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+      scannerRef.current = scanner;
+      scanner.render(onScanSuccess, (err) => {
+        if (err.includes("NotFoundException")) return;
+        console.warn(err);
+      });
+      return () => {
+        scanner.clear().catch(console.error);
+      };
+    }
+  }, [step]);
+
+  const onScanSuccess = async (decodedText: string) => {
+    if (scannerRef.current) {
+        scannerRef.current.clear().catch(console.error);
+    }
+    
+    // 1. Fetch Machine
+    const { data: machine, error } = await supabase.from('machines').select('*').eq('qr_code', decodedText).single();
+    
+    if (error || !machine) {
+        setValidationError("Machine not found for this QR code.");
+        return;
+    }
+
+    // 2. Fetch SCL to get expected customer/asset info for validation if needed
+    const { data: scl } = await supabase.from('service_call_logs').select('*').eq('id', sclId).single();
+
+    // 3. Simple validation (adjust logic as per business rules)
+    if (scl && machine.customer_code !== scl.customer_code) {
+        setValidationError("Mismatch: Scanned machine does not match assigned customer.");
+        return;
+    }
+
+    setScannedMachine(machine);
+    setStep(2);
+  };
+
+  const submitClosure = async () => {
+    if (!photoFile || !notes) {
+      toast.error('Please add notes and a photo');
+      return;
+    }
+
+    setStep(3);
+
+    // 1. Upload Photo
+    const fileExt = photoFile.name.split('.').pop();
+    const fileName = `${sclId}-${Date.now()}.${fileExt}`;
+    const { error: uploadError, data: uploadData } = await supabase.storage
+      .from('maintenance-photos')
+      .upload(fileName, photoFile);
+    
+    if (uploadError) {
+      toast.error('Failed to upload photo');
+      setStep(2);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from('maintenance-photos').getPublicUrl(fileName);
+
+    // 2. Update SCL
+    const { error: updateError } = await supabase.from('service_call_logs')
+      .update({
+        photo_url: urlData.publicUrl,
+        closed_remarks: notes,
+        serial_number: scannedMachine.serial_number,
+        qrcode: scannedMachine.qr_code,
+        current_status: 'Closed',
+        closed_date: new Date().toISOString()
+      })
+      .eq('id', sclId);
+
+    if (updateError) {
+      toast.error('Failed to close call');
+      setStep(2);
+    } else {
+      toast.success('Task closed successfully');
+      navigate('/my-route');
+    }
+  };
+
+  return (
+    <div className="p-4 max-w-md mx-auto space-y-6">
+      <h1 className="text-xl font-bold">Closure: SCL #{sclId}</h1>
+
+      {step === 1 && (
+        <div className="space-y-4">
+          <div id="qr-reader" className="w-full"></div>
+          {validationError && (
+            <div className="bg-red-50 p-4 rounded-lg flex items-center gap-3 text-red-700">
+               <AlertTriangle />
+               <p>{validationError}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 2 && scannedMachine && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-xl border border-gray-200">
+            <h2 className="font-bold mb-2">Verified Machine</h2>
+            <p><strong>Asset:</strong> {scannedMachine.asset_name}</p>
+            <p><strong>Serial:</strong> {scannedMachine.serial_number}</p>
+          </div>
+
+          <textarea 
+            value={notes} onChange={(e) => setNotes(e.target.value)} 
+            placeholder="Details of work..." className="w-full h-32 p-3 border rounded-lg"
+          />
+
+          <input type="file" onChange={(e) => e.target.files?.[0] && setPhotoFile(e.target.files[0])} accept="image/*" className="w-full" />
+
+          <button onClick={submitClosure} className="w-full bg-brand-gold text-white p-4 rounded-xl font-bold flex items-center justify-center gap-2">
+            <CheckCircle2 /> Submit Closure
+          </button>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="text-center py-10">Processing...</div>
+      )}
+    </div>
+  );
+}

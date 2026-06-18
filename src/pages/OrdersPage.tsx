@@ -1,6 +1,6 @@
 import { getNextOrderNumber, getAvailableStock } from '../api/assetApi';
 import React, { useState, useEffect, useRef } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createOrderSchema, CreateOrderSchema } from '../lib/schemas';
 import { supabase } from '../lib/supabase';
@@ -17,7 +17,7 @@ export function OrdersPage() {
   const [loading, setLoading] = useState(true);
 
   // For creation form
-  const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm<CreateOrderSchema>({
+  const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm<any>({
     resolver: zodResolver(createOrderSchema),
     defaultValues: {
         orderNumber: '',
@@ -32,7 +32,7 @@ export function OrdersPage() {
   const [availableStockData, setAvailableStockData] = useState<any[]>([]);
   const lineItems = watch('lineItems');
 
-  const handleFormSubmit = async (data: CreateOrderSchema) => {
+  const handleFormSubmit: SubmitHandler<CreateOrderSchema> = async (data) => {
      await createOrder(data);
   };
 
@@ -211,7 +211,6 @@ export function OrdersPage() {
                                         <input 
                                           type="number" 
                                           {...register(`lineItems.${index}.requiredQty`, {
-                                              valueAsNumber: true,
                                               max: { value: maxAvailable, message: `Max available: ${maxAvailable}` }
                                           })}
                                           min="1"
