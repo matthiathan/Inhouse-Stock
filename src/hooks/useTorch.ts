@@ -3,7 +3,22 @@ import { Html5Qrcode } from 'html5-qrcode';
 
 export const useTorch = (scannerRef?: MutableRefObject<Html5Qrcode | null>) => {
   const [torchOn, setTorchOn] = useState(false);
+  const [isSupported, setIsSupported] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const checkSupport = useCallback(async () => {
+    try {
+      if (!scannerRef || !scannerRef.current) return;
+      const track = scannerRef.current.getRunningTrack();
+      if (!track) return;
+      
+      const capabilities = track.getCapabilities ? track.getCapabilities() : null;
+      // @ts-ignore - 'torch' is part of the MediaTrackCapabilities interface
+      setIsSupported(!!(capabilities && capabilities.torch));
+    } catch (err) {
+      setIsSupported(false);
+    }
+  }, [scannerRef]);
 
   const toggleTorch = useCallback(async () => {
     try {
@@ -23,7 +38,10 @@ export const useTorch = (scannerRef?: MutableRefObject<Html5Qrcode | null>) => {
       const capabilities = track.getCapabilities ? track.getCapabilities() : null;
       
       // @ts-ignore - 'torch' is part of the MediaTrackCapabilities interface
-      if (capabilities && capabilities.torch) {
+      const hasTorch = !!(capabilities && capabilities.torch);
+      setIsSupported(hasTorch);
+
+      if (hasTorch) {
         // 4. Apply the constraint
         await track.applyConstraints({
           advanced: [{ torch: !torchOn }] as any
@@ -39,6 +57,6 @@ export const useTorch = (scannerRef?: MutableRefObject<Html5Qrcode | null>) => {
     }
   }, [torchOn, scannerRef]);
 
-  return { torchOn, setTorchOn, toggleTorch, error };
+  return { torchOn, setTorchOn, toggleTorch, error, isSupported, checkSupport };
 };
 

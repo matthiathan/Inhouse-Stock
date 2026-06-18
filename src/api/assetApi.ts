@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { uploadAssetPhoto } from '../lib/storage';
 
 export const getAssetByQR = async (qr: string) => {
   const { data, error } = await supabase
@@ -25,14 +26,12 @@ export const getSections = async () => {
 export const updateAssetSection = async (id: string | number, newSectionName: string) => {
   const parsedId = typeof id === 'string' && !isNaN(Number(id)) ? Number(id) : id;
   
-  // Resolve additional identifiers to make updates extremely resilient
   let qrCode = "";
   let serialNumber = "";
   let machineDbId: any = null;
   let famDbId: any = null;
   
   try {
-    // Attempt to look up the machine in 'machines' to resolve actual primary keys and QR code
     const { data: machineData } = await supabase
       .from('machines')
       .select('id, qr_code, serial_number')
@@ -48,7 +47,6 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
   }
 
   try {
-    // Attempt to look up in 'fam' table to resolve DB ID and QR code
     const { data: famData } = await supabase
       .from('fam')
       .select('id, "QR Code", "Serial#"')
@@ -63,13 +61,11 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
     console.warn("Resilient lookup: Failed to seek machine in 'fam' table:", err);
   }
 
-  // Fallback if we still don't have a qr_code but know ID is like '30663'
   if (!qrCode && String(id) === '30663') {
     qrCode = '30663';
   }
 
   try {
-    // 1. Update the 'fam' table (Current Location column) via ID, QR Code, or Serial Number
     try {
       let famQuery = supabase.from('fam').update({ "Current Location": newSectionName });
       if (famDbId) {
@@ -78,30 +74,18 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
         famQuery = famQuery.eq('id', parsedId);
       }
       const { error: famErr } = await famQuery;
-      if (famErr) {
-        console.warn("Primary fam update error:", famErr.message);
-      }
+      if (famErr) console.warn("Primary fam update error:", famErr.message);
 
       if (qrCode) {
-        const { error: famQrErr } = await supabase
-          .from('fam')
-          .update({ "Current Location": newSectionName })
-          .eq('QR Code', qrCode);
-        if (famQrErr) console.warn("QR-based fam update error:", famQrErr.message);
+        await supabase.from('fam').update({ "Current Location": newSectionName }).eq('QR Code', qrCode);
       }
-
       if (serialNumber) {
-        const { error: famSnErr } = await supabase
-          .from('fam')
-          .update({ "Current Location": newSectionName })
-          .eq('Serial#', serialNumber);
-        if (famSnErr) console.warn("Serial-based fam update error:", famSnErr.message);
+        await supabase.from('fam').update({ "Current Location": newSectionName }).eq('Serial#', serialNumber);
       }
     } catch (e) {
       console.warn("Resilient error while updating 'fam' table:", e);
     }
 
-    // 2. Update the 'machines' table (section column) via ID or QR Code
     let machinesData: any = null;
     try {
       let machQuery = supabase.from('machines').update({ section: newSectionName });
@@ -111,29 +95,17 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
         machQuery = machQuery.eq('id', parsedId);
       }
       const { data, error: machErr } = await machQuery.select();
-      if (data) {
-        machinesData = data;
-      }
-      if (machErr) {
-        console.warn("Primary machines update error:", machErr.message);
-      }
+      if (data) machinesData = data;
+      if (machErr) console.warn("Primary machines update error:", machErr.message);
 
       if (qrCode) {
-        const { data: qData, error: machQrErr } = await supabase
-          .from('machines')
-          .update({ section: newSectionName })
-          .eq('qr_code', qrCode)
-          .select();
-        if (qData && qData.length > 0) {
-          machinesData = qData;
-        }
-        if (machQrErr) console.warn("QR-based machines update error:", machQrErr.message);
+        const { data: qData } = await supabase.from('machines').update({ section: newSectionName }).eq('qr_code', qrCode).select();
+        if (qData && qData.length > 0) machinesData = qData;
       }
     } catch (e) {
       console.warn("Resilient error while updating 'machines' table:", e);
     }
 
-    // 3. Retrieve the updated record to return to the frontend
     const { data: updatedRecord, error: fetchError } = await supabase
       .from('machines')
       .select('*')
@@ -142,11 +114,7 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
 
     if (fetchError) {
       if (qrCode) {
-        const { data: qrRecord } = await supabase
-          .from('machines')
-          .select('*')
-          .eq('qr_code', qrCode)
-          .single();
+        const { data: qrRecord } = await supabase.from('machines').select('*').eq('qr_code', qrCode).single();
         if (qrRecord) return qrRecord;
       }
       return (machinesData && machinesData[0]) || { id: parsedId, section: newSectionName };
@@ -175,6 +143,7 @@ export interface ComprehensiveMachineData {
   contractNo?: string;
   costAmount?: string | number | null;
   navisionFaCode?: string;
+  photo_url?: string | null;
 }
 
 export const addMachine = async (machineData: ComprehensiveMachineData) => {
@@ -197,6 +166,7 @@ export const addMachine = async (machineData: ComprehensiveMachineData) => {
         "Contract#": machineData.contractNo || null,
         "Cost Amount": machineData.costAmount ? Number(machineData.costAmount) : null,
         "FA Code(From Navision)": machineData.navisionFaCode || null,
+        "photo_url": machineData.photo_url || null,
         "Created TS": new Date().toISOString()
       }
     ])
@@ -207,6 +177,23 @@ export const addMachine = async (machineData: ComprehensiveMachineData) => {
     throw error;
   }
   return data;
+};
+
+export const addMachineWithPhoto = async (file: File | null, machineData: ComprehensiveMachineData) => {
+  let photoUrl = machineData.photo_url || null;
+
+  if (file && machineData.qrCode) {
+    try {
+      photoUrl = await uploadAssetPhoto(file, machineData.qrCode);
+    } catch (err: any) {
+      console.warn("Asset upload failed, proceeding without photo:", err);
+    }
+  }
+
+  return await addMachine({
+    ...machineData,
+    photo_url: photoUrl
+  });
 };
 
 export const getMachineModels = async (): Promise<string[]> => {
@@ -335,7 +322,6 @@ export const updateStockQuantities = async (barcode: string, totalUnits: number)
 
 export async function deleteStockItem(stockId: string, imagePath?: string, tableName: string = 'stock') {
   try {
-    // 1. Delete image from storage if it exists & provided
     if (imagePath && imagePath.includes('/storage/v1/object/public/')) {
         const parts = imagePath.split('/storage/v1/object/public/')[1].split('/');
         const bucket = parts[0];
@@ -343,18 +329,11 @@ export async function deleteStockItem(stockId: string, imagePath?: string, table
         
         if (path) {
             const { error: storageError } = await supabase.storage.from(bucket).remove([path]);
-            if (storageError) {
-                console.warn("Could not delete associated image:", storageError);
-            }
+            if (storageError) console.warn("Could not delete associated image:", storageError);
         }
     }
 
-    // 2. Delete database record
-    const { error: dbError } = await supabase
-      .from(tableName)
-      .delete()
-      .eq('id', stockId);
-    
+    const { error: dbError } = await supabase.from(tableName).delete().eq('id', stockId);
     if (dbError) throw dbError;
     
     return { success: true };
@@ -366,11 +345,7 @@ export async function deleteStockItem(stockId: string, imagePath?: string, table
 
 export const archiveStockItem = async (stockId: number) => {
   try {
-    const { error } = await supabase
-      .from('stock')
-      .update({ is_active: false })
-      .eq('id', stockId);
-
+    const { error } = await supabase.from('stock').update({ is_active: false }).eq('id', stockId);
     if (error) throw new Error(error.message);
     return { success: true };
   } catch (error: any) {
@@ -380,10 +355,7 @@ export const archiveStockItem = async (stockId: number) => {
 
 export const createMaintenanceTicket = async (ticketData: any) => {
   try {
-    const { data, error } = await supabase
-      .from('maintenance_tickets')
-      .insert([ticketData]);
-
+    const { data, error } = await supabase.from('maintenance_tickets').insert([ticketData]);
     if (error) throw new Error(error.message);
     return { success: true, data };
   } catch (error: any) {

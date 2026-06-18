@@ -55,6 +55,7 @@ export function AssetDetailsPage() {
     const [saving, setSaving] = useState(false);
     const [searchParams] = useSearchParams();
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [pendingMachinePhoto, setPendingMachinePhoto] = useState<File | null>(null);
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, assetId: string) => {
         if (e.target.files && e.target.files[0]) {
@@ -163,13 +164,35 @@ export function AssetDetailsPage() {
         if (!asset || !selectedSection) return;
         setSaving(true);
         try {
+            let photoUrl = asset.photo_url;
+
+            // If a new file was captured, upload it first
+            if (pendingMachinePhoto) {
+                try {
+                    photoUrl = await uploadAssetPhoto(pendingMachinePhoto, asset.id);
+                } catch (error) {
+                    console.error("Upload failed", error);
+                    toast.error("Failed to upload image. Please try again.");
+                    setSaving(false);
+                    return; // Stop the save process
+                }
+            }
+
+            // Proceed to save the record
             await updateAssetSection(asset.id, selectedSection);
-            setAsset(prev => prev ? { ...prev, section: selectedSection } : null);
+            
+            // If photo was updated, also update the photo_url field
+            if (photoUrl !== asset.photo_url) {
+                await assetRepository.update(asset.id, { photo_url: photoUrl } as any);
+            }
+
+            setAsset(prev => prev ? { ...prev, section: selectedSection, photo_url: photoUrl } : null);
             localStorage.removeItem('cached_assets');
-            toast.success("Section updated successfully!");
+            toast.success("Asset updated successfully!");
             setIsModalOpen(false);
+            setPendingMachinePhoto(null);
         } catch (err: any) {
-            toast.error("Database section update failed.");
+            toast.error("Database update failed.");
         } finally {
             setSaving(false);
         }
@@ -433,16 +456,45 @@ export function AssetDetailsPage() {
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-100">
                     <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl">
-                        <h2 className="text-lg font-bold mb-4 text-text-primary">Update Machine Section</h2>
-                        <select 
-                            value={selectedSection} 
-                            onChange={(e) => setSelectedSection(e.target.value)}
-                            className="w-full p-2.5 min-h-[44px] border border-brand-border rounded-lg mb-4 bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm cursor-pointer font-medium"
-                        >
-                            {sections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
-                        </select>
-                        <div className="flex justify-end gap-2">
-                            <button onClick={() => setIsModalOpen(false)} className="px-4 py-2.5 min-h-[44px] text-text-secondary hover:bg-bg-base rounded-lg cursor-pointer text-sm">Cancel</button>
+                        <h2 className="text-lg font-bold mb-4 text-text-primary">Update Machine Details</h2>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-text-secondary mb-1">Target Section *</label>
+                                <select 
+                                    value={selectedSection} 
+                                    onChange={(e) => setSelectedSection(e.target.value)}
+                                    className="w-full p-2.5 min-h-[44px] border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm cursor-pointer font-medium"
+                                >
+                                    {sections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-text-secondary mb-1">Asset Photograph</label>
+                                <div className="border border-dashed border-brand-border rounded-lg p-4 bg-bg-base/50">
+                                    <input 
+                                        type="file" 
+                                        accept="image/*" 
+                                        capture="environment" 
+                                        onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                                setPendingMachinePhoto(e.target.files[0]);
+                                            }
+                                        }}
+                                        className="block w-full text-xs text-text-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-brand-gold file:text-white file:text-xs file:font-semibold hover:file:bg-brand-gold/90 transition-all cursor-pointer"
+                                    />
+                                    {pendingMachinePhoto && (
+                                        <div className="mt-2 flex items-center gap-2 text-emerald-500 text-[10px] font-bold uppercase tracking-wider">
+                                            <CheckCircle2 size={12} /> Photo captured & ready for upload
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 mt-6">
+                            <button onClick={() => { setIsModalOpen(false); setPendingMachinePhoto(null); }} className="px-4 py-2.5 min-h-[44px] text-text-secondary hover:bg-bg-base rounded-lg cursor-pointer text-sm">Cancel</button>
                             <button onClick={handleSave} disabled={saving} className="bg-brand-gold text-white px-5 py-2.5 min-h-[44px] rounded-lg font-medium hover:bg-brand-gold/90 transition-colors flex items-center justify-center text-sm cursor-pointer min-w-[120px]">
                                 {saving ? 'Saving...' : 'Save Changes'}
                             </button>

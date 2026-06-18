@@ -6,7 +6,7 @@ import { receiveStockSchema, ReceiveStockSchema } from '../lib/schemas';
 import { Machine, Customer, Section } from '../types';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { toast } from 'sonner';
-import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineModels, getNextFADocSequence, getStockByBarcode, deductStockQuantity, deleteStockItem, archiveStockItem } from '../api/assetApi';
+import { getAssetByQR, getSections, updateAssetSection, addMachine, addMachineWithPhoto, getMachineModels, getNextFADocSequence, getStockByBarcode, deductStockQuantity, deleteStockItem, archiveStockItem } from '../api/assetApi';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { assetRepository } from '../services/api/assetRepository';
@@ -47,6 +47,7 @@ export function StockPage() {
   const [dispatchBoxes, setDispatchBoxes] = useState('');
   const [dispatchUnits, setDispatchUnits] = useState('');
   const [dispatching, setDispatching] = useState(false);
+  const [pendingStockPhoto, setPendingStockPhoto] = useState<File | null>(null);
 
   // Form states (deprecated in favor of react-hook-form)
   const { register, handleSubmit, reset, setValue, watch } = useForm<ReceiveStockSchema>({
@@ -156,68 +157,56 @@ export function StockPage() {
 
   const handleReceiveSubmit = async (data: ReceiveStockSchema) => {
     setSaving(true);
-    const palletQty = data.palletQty;
-    const boxQty = data.boxes;
-    const unitsPerBox = data.unitsPerBox;
-    const calculatedTotalUnits = (palletQty * 48 * unitsPerBox) + (boxQty * unitsPerBox);
-    const generatedSku = `SKU-${Math.floor(10000 + Math.random() * 90000)}`;
+    try {
+      const palletQty = data.palletQty;
+      const boxQty = data.boxes;
+      const unitsPerBox = data.unitsPerBox;
+      const calculatedTotalUnits = (palletQty * 48 * unitsPerBox) + (boxQty * unitsPerBox);
+      const generatedSku = `SKU-${Math.floor(10000 + Math.random() * 90000)}`;
 
-    if (detectedTable !== 'local') {
-      try {
-        const insertData = {
+      if (detectedTable !== 'local') {
+        await stockRepository.uploadAndReceive(pendingStockPhoto, {
           item_name: data.item,
-          quantity: calculatedTotalUnits,
-          notes: data.notes || '',
           sku: generatedSku,
           barcode: data.barcode,
           pallet_quantity: palletQty,
           box_quantity: boxQty,
           units_per_box: unitsPerBox,
-          image_url: data.imageUrl
-        };
-
-        const { error } = await supabase
-          .from(detectedTable === 'stock' ? 'stock' : 'inventory')
-          .insert([insertData]);
-
-        if (error) throw error;
+          quantity: calculatedTotalUnits,
+          notes: data.notes || ''
+        });
         
         toast.success("Stock received successfully!");
         setIsModalOpen(false);
+        setPendingStockPhoto(null);
         reset();
 
         // Refresh
-        const { data: refreshed } = await supabase
-          .from(detectedTable === 'stock' ? 'stock' : 'inventory')
-          .select('*')
-          .order('id', { ascending: false });
-        if (refreshed) {
-          setStockItems(refreshed);
-        }
-      } catch (err: any) {
-        toast.error(err.message || "Error inserting stock data");
-      } finally {
-        setSaving(false);
+        queryClient.invalidateQueries({ queryKey: ['stock'] });
+      } else {
+        const newId = stockItems.length > 0 ? Math.max(...stockItems.map(i => Number(i.id))) + 1 : 1;
+        const newItem = {
+          id: newId,
+          item_name: data.item,
+          sku: generatedSku,
+          quantity: calculatedTotalUnits,
+          notes: data.notes || '',
+          barcode: data.barcode,
+          pallet_quantity: palletQty,
+          box_quantity: boxQty,
+          units_per_box: unitsPerBox
+        };
+        const updated = [newItem, ...stockItems];
+        localStorage.setItem('local_stock', JSON.stringify(updated));
+        setStockItems(updated);
+        toast.success("Stock received!");
+        setIsModalOpen(false);
+        reset();
       }
-    } else {
-      const newId = stockItems.length > 0 ? Math.max(...stockItems.map(i => Number(i.id))) + 1 : 1;
-      const newItem = {
-        id: newId,
-        item_name: data.item,
-        sku: generatedSku,
-        quantity: calculatedTotalUnits,
-        notes: data.notes || '',
-        barcode: data.barcode,
-        pallet_quantity: palletQty,
-        box_quantity: boxQty,
-        units_per_box: unitsPerBox
-      };
-      const updated = [newItem, ...stockItems];
-      localStorage.setItem('local_stock', JSON.stringify(updated));
-      setStockItems(updated);
-      toast.success("Stock received!");
-      setIsModalOpen(false);
-      reset();
+    } catch (err: any) {
+      console.error("Failed to receive stock:", err);
+      toast.error(err.message || "Database connection error.");
+    } finally {
       setSaving(false);
     }
   };
@@ -642,7 +631,7 @@ export function StockPage() {
                     id="camera-input"
                     onChange={(e) => {
                        if (e.target.files && e.target.files[0]) {
-                           alert("Picture captured! Note: Direct uploading to image storage is not implemented, please manually provide a hosted image URL.");
+                           setPendingStockPhoto(e.target.files[0]);
                        }
                     }} 
                   />
@@ -650,6 +639,9 @@ export function StockPage() {
                       📸
                   </label>
                 </div>
+                {pendingStockPhoto && (
+                  <p className="mt-2 text-[10px] text-emerald-500 font-bold uppercase">✓ {pendingStockPhoto.name} ready for upload</p>
+                )}
               </div>
 
               <div>
@@ -723,6 +715,7 @@ export function AssetsPage() {
   const [assetCategory, setAssetCategory] = useState<'VM' | 'EA' | 'OE'>('VM');
   const [machineModels, setMachineModels] = useState<string[]>([]);
   const [nextSequenceNumber, setNextSequenceNumber] = useState<number>(1000);
+  const [pendingAssetPhoto, setPendingAssetPhoto] = useState<File | null>(null);
 
   // Fetch distinct machine models and FA doc sequence on modal open
   useEffect(() => {
@@ -807,7 +800,7 @@ export function AssetsPage() {
     setSavingNewMachine(true);
     const dynamicFaDocNo = `FA/${nextSequenceNumber}/${assetCategory}`;
     try {
-      await addMachine({
+      await addMachineWithPhoto(pendingAssetPhoto, {
         faDocNo: dynamicFaDocNo,
         assetName: addForm.assetName,
         assetNo: assetCategory,
@@ -827,6 +820,7 @@ export function AssetsPage() {
 
       toast.success('Machine added to warehouse');
       handleCloseAddModal();
+      setPendingAssetPhoto(null);
 
       // Trigger automatic list component refresh
       setRefreshTrigger(prev => prev + 1);
@@ -1225,6 +1219,27 @@ export function AssetsPage() {
                       className="w-full p-2.5 h-11 border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary/40 outline-none focus:border-brand-gold text-sm min-h-[44px]"
                     />
                   </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                      Asset Photograph
+                    </label>
+                    <div className="border border-dashed border-brand-border rounded-lg p-4 bg-bg-base/40">
+                      <input 
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            setPendingAssetPhoto(e.target.files[0]);
+                          }
+                        }}
+                        className="block w-full text-xs text-text-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-brand-gold file:text-white file:text-xs file:font-semibold hover:file:bg-brand-gold/90 transition-all cursor-pointer"
+                      />
+                      {pendingAssetPhoto && (
+                        <p className="mt-2 text-[10px] text-emerald-500 font-bold uppercase tracking-widest leading-none">✓ Evidence Ready</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1342,10 +1357,15 @@ export function ScannerPage() {
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const scannerRef = React.useRef<Html5Qrcode | null>(null);
-  const { torchOn, setTorchOn, toggleTorch, error: torchError } = useTorch(scannerRef);
+  const { torchOn, setTorchOn, toggleTorch, error: torchError, isSupported, checkSupport } = useTorch(scannerRef);
   const isProcessingRef = React.useRef(false);
   const [scannedMachine, setScannedMachine] = useState<Machine | null>(null);
   const [unrecognizedQr, setUnrecognizedQr] = useState<string | null>(null);
+
+  // Check torch support on mount
+  useEffect(() => {
+    checkSupport();
+  }, [checkSupport]);
 
   const Maps = navigate;
 
@@ -1476,6 +1496,7 @@ export function ScannerPage() {
       }
     ).then(() => {
       isScanning = true;
+      checkSupport();
     }).catch(err => {
       console.error("Camera access error:", err);
       if (isMounted) {
@@ -1514,13 +1535,15 @@ export function ScannerPage() {
           <p className="text-text-secondary text-sm">Scan asset QR codes or inventory barcodes to query details.</p>
         </div>
         <div className="flex flex-col items-center">
-          <button 
-              onClick={toggleTorch}
-              className={`p-3 rounded-full transition-all cursor-pointer ${torchOn ? 'bg-yellow-400 shadow-md shadow-yellow-200 text-white' : 'bg-bg-elevated border border-brand-border text-text-secondary hover:text-text-primary'}`}
-              title="Toggle Flashlight"
-          >
-              <Lightbulb size={20} />
-          </button>
+          {isSupported && (
+            <button 
+                onClick={toggleTorch}
+                className={`p-3 rounded-full transition-all cursor-pointer ${torchOn ? 'bg-yellow-400 shadow-md shadow-yellow-200 text-white' : 'bg-bg-elevated border border-brand-border text-text-secondary hover:text-text-primary'}`}
+                title="Toggle Flashlight"
+            >
+                <Lightbulb size={20} />
+            </button>
+          )}
           {torchError && (
             <span className="text-[10px] text-red-500 mt-1 max-w-[120px] text-center truncate" title={torchError}>
               Torch error
