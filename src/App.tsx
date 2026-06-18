@@ -34,7 +34,7 @@ function RoleProtectedRoute({ children, allowedRoles }: RoleProtectedRouteProps)
   const userRole = role || 'user';
 
   if (!allowedRoles.includes(userRole)) {
-    const redirectTarget = (userRole === 'tech' || userRole === 'user') ? '/scanner' : '/stock';
+    const redirectTarget = (userRole === 'tech' || userRole === 'road_tech' || userRole === 'user') ? '/scanner' : '/stock';
     return <Navigate to={redirectTarget} replace />;
   }
 
@@ -43,7 +43,7 @@ function RoleProtectedRoute({ children, allowedRoles }: RoleProtectedRouteProps)
 
 function IndexRedirect() {
   const { role } = useAuth();
-  const target = (role === 'tech') ? '/my-route' : (role === 'user' ? '/scanner' : '/stock');
+  const target = (role === 'tech' || role === 'road_tech') ? '/my-route' : (role === 'user' ? '/scanner' : '/stock');
   return <Navigate to={target} replace />;
 }
 
@@ -132,7 +132,7 @@ export default function App() {
           <Route 
             path="my-route" 
             element={
-              <RoleProtectedRoute allowedRoles={['tech']}>
+              <RoleProtectedRoute allowedRoles={['tech', 'road_tech']}>
                 <TechRoutePage />
               </RoleProtectedRoute>
             } 
@@ -140,7 +140,7 @@ export default function App() {
           <Route 
             path="tech-closure/:id" 
             element={
-              <RoleProtectedRoute allowedRoles={['tech']}>
+              <RoleProtectedRoute allowedRoles={['tech', 'road_tech']}>
                 <SCLTechClosurePage />
               </RoleProtectedRoute>
             } 
@@ -148,7 +148,7 @@ export default function App() {
           <Route 
             path="tech-route" 
             element={
-              <RoleProtectedRoute allowedRoles={['tech']}>
+              <RoleProtectedRoute allowedRoles={['tech', 'road_tech']}>
                 <TechRoutePage />
               </RoleProtectedRoute>
             } 

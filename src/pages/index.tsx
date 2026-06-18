@@ -12,6 +12,8 @@ import { supabase } from '../lib/supabase';
 import { useStock } from '../features/inventory/hooks';
 import { Button } from '../components/ui/Button';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTorch } from '../hooks/useTorch';
+import { Lightbulb, AlertTriangle } from 'lucide-react';
 
 export { AnalyticsPage } from './AnalyticsPage';
 export { AssetDetailsPage } from './AssetDetailsPage';
@@ -1347,29 +1349,11 @@ export function ScannerPage() {
   const navigate = useNavigate();
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [torchOn, setTorchOn] = useState(false);
+  const { torchOn, toggleTorch, error: torchError } = useTorch();
   const isProcessingRef = React.useRef(false);
   const [scannedMachine, setScannedMachine] = useState<Machine | null>(null);
   const [unrecognizedQr, setUnrecognizedQr] = useState<string | null>(null);
   const scannerRef = React.useRef<Html5Qrcode | null>(null);
-
-  const toggleTorch = async () => {
-    if (scannerRef.current) {
-        try {
-            const capabilities = scannerRef.current.getRunningTrackCapabilities();
-            if (capabilities && (capabilities as any).torch) {
-                await (scannerRef.current as any).applyVideoConstraints({ advanced: [{ torch: !torchOn }] });
-                setTorchOn(!torchOn);
-                toast.info(`Flashlight ${!torchOn ? 'on' : 'off'}`);
-            } else {
-                toast.error("Flashlight not supported on this device.");
-            }
-        } catch (e) {
-            console.error("Torch error:", e);
-            toast.error("Could not toggle flashlight.");
-        }
-    }
-  };
 
   const Maps = navigate;
 
@@ -1536,12 +1520,20 @@ export function ScannerPage() {
           <h1 className="text-2xl font-bold text-text-primary font-sans">Barcode & QR Scanner</h1>
           <p className="text-text-secondary text-sm">Scan asset QR codes or inventory barcodes to query details.</p>
         </div>
-        <button 
-            onClick={toggleTorch}
-            className={`p-2 rounded-full ${torchOn ? 'bg-yellow-500' : 'bg-gray-200'}`}
-        >
-            Flashlight
-        </button>
+        <div className="flex flex-col items-center">
+          <button 
+              onClick={toggleTorch}
+              className={`p-3 rounded-full transition-all cursor-pointer ${torchOn ? 'bg-yellow-400 shadow-md shadow-yellow-200 text-white' : 'bg-bg-elevated border border-brand-border text-text-secondary hover:text-text-primary'}`}
+              title="Toggle Flashlight"
+          >
+              <Lightbulb size={20} />
+          </button>
+          {torchError && (
+            <span className="text-[10px] text-red-500 mt-1 max-w-[120px] text-center truncate" title={torchError}>
+              Torch error
+            </span>
+          )}
+        </div>
       </header>
 
       <div className="bg-bg-elevated p-4 md:p-6 rounded-xl border border-brand-border md:max-w-md md:mx-auto shadow-sm">
