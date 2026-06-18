@@ -34,20 +34,10 @@ export const useContractLookup = (faDocId?: string) => {
       const { data, error } = await supabase
         .from(tableName)
         .select('*')
-        .eq('doc#', faDocId) // Try both raw and double-quoted depending on supabase/postgresql requirements. The prompt uses eq('"doc#"', faDocId) to ensure special characters like symbol '#' are wrapped if double quotes are needed, or we can use '"doc#"' exactly as requested.
+        .eq('"doc#"', faDocId)
         .single();
 
-      if (error) {
-        // Fallback: system can try with '"doc#"' if needed, or if error we'll throw, let's stick to the prompt's instruction: eq('"doc#"', faDocId)
-        const { data: retryData, error: retryError } = await supabase
-          .from(tableName)
-          .select('*')
-          .eq('"doc#"', faDocId)
-          .single();
-
-        if (retryError) throw retryError;
-        return retryData;
-      }
+      if (error) throw error;
       return data;
     },
     enabled: !!faDocId,

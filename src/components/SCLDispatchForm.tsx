@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { customerRepository } from '../services/api/customerRepository';
+import { contractRepository } from '../services/api/contractRepository';
 import { useQuery } from '@tanstack/react-query';
 import { userRepository } from '../features/users/repository';
 import { assetRepository } from '../services/api/assetRepository';
@@ -22,8 +22,16 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
   const [region, setRegion] = useState<'KZN' | 'JHB' | 'CPT'>('KZN');
 
   const { data: customers = [], isLoading: isCustomersLoading } = useQuery({
-    queryKey: ['customers', region],
-    queryFn: () => customerRepository.getCustomersByRegion(region)
+    queryKey: ['contract-customers', region],
+    queryFn: async () => {
+      const names = await contractRepository.getContractCustomers(region);
+      return names.map(name => ({
+        id: name,
+        name: name,
+        code: '',
+        address: ''
+      }));
+    }
   });
 
   const handleRegionChange = (newRegion: 'KZN' | 'JHB' | 'CPT') => {
@@ -343,10 +351,10 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
           control={control}
           render={({ field }) => (
             <ComboBox
-              options={customers.map(c => ({ label: `${c.name} (${c.region || c.code || 'No Code'})`, value: c.id }))}
+              options={customers.map(c => ({ label: c.name, value: c.id }))}
               value={field.value}
               onChange={field.onChange}
-              placeholder={isCustomersLoading ? "Loading customers..." : "Search and select customer..."}
+              placeholder={isCustomersLoading ? "Loading customers..." : "Search and select customer from contracts..."}
             />
           )}
         />

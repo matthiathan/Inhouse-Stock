@@ -1,22 +1,15 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
-  Package, 
-  Database, 
-  QrCode, 
-  Settings, 
   ShieldCheck,
   Sun,
   Moon,
   LogOut,
   User as UserIcon,
-  BarChart3,
-  ClipboardList,
-  Map,
-  MapPin
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'sonner';
+import { ALL_NAV_ITEMS } from '../../constants/navigation';
 
 export default function Sidebar() {
   const { user, logout, role } = useAuth();
@@ -24,20 +17,7 @@ export default function Sidebar() {
 
   const userRole = role || 'user';
 
-  const allNavItems = [
-    { name: 'Stock', path: '/stock', icon: Package, roles: ['admin', 'ops_manager', 'warehouse'] },
-    { name: 'Orders', path: '/orders', icon: ClipboardList, roles: ['admin', 'ops_manager', 'warehouse'] },
-    { name: 'Fulfillment', path: '/fulfillment', icon: ClipboardList, roles: ['admin', 'ops_manager', 'warehouse'] },
-    { name: 'Route Planner', path: '/route-planner', icon: Map, roles: ['admin', 'ops_manager'] },
-    { name: 'Dispatch', path: '/dispatch', icon: Map, roles: ['admin', 'ops_manager'] },
-    { name: 'My Route', path: '/my-route', icon: MapPin, roles: ['tech', 'road_tech'] },
-    { name: 'Assets', path: '/assets', icon: Database, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'road_tech', 'user'] },
-    { name: 'Scanner', path: '/scanner', icon: QrCode, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'road_tech', 'user'] },
-    { name: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['admin', 'ops_manager'] },
-    { name: 'Settings', path: '/settings', icon: Settings, roles: ['admin', 'ops_manager'] },
-  ];
-
-  const navItems = allNavItems.filter(item => item.roles.includes(userRole));
+  const navItems = ALL_NAV_ITEMS.filter(item => item.roles.includes(userRole));
 
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
