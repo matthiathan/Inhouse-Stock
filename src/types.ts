@@ -2,42 +2,96 @@ export interface UnifiedCustomer {
   id: string;
   name: string;
   address: string;
-  code: string;
-  location: string;
-}
-
-export interface ServiceCallLog {
-  id: string;
-  doc_no: string;
-  do_number: string;
-  priority: 'Low' | 'Medium' | 'High' | 'Critical';
-  service_type: string;
-  sub_task: string;
-  narration: string;
-  customer_id: string;
-  assigned_employee_id: string;
-  client_name: string;
-  client_location: string;
-  address: string;
-  customer_code: string;
-  assigned_employee: string;
-  current_status: 'Open' | 'Closed';
-  assigned_date_time: string;
-  serial_number?: string | null;
-  qrcode?: string | null;
-  photo_url?: string | null;
-  closed_remarks?: string | null;
-  closed_date?: string | null;
-  unified_customers?: UnifiedCustomer | null;
 }
 
 export interface MaintenanceTicket {
   id: string;
-  customer_code: string;
+  machine_id: string;
+  issue_description: string;
+  status: string;
+  priority: string;
+  created_at: string;
+  tech_id: string;
+  scheduled_time: string;
+  contact_person: string;
+  contact_phone: string;
+  unified_customers?: UnifiedCustomer;
+}
+
+export type Region = 'KZN' | 'JHB' | 'CPT';
+
+export interface Customer {
+  id: string;
+  name: string;
+  region: Region;
+  code: string;
+  address: string;
+  details: Record<string, any>;
+  created_at: string;
+}
+
+export interface Asset {
+  id: string;
+  serial_number: string;
+  qr_code: string;
+  asset_name: string;
+  customer_id: string;
+  machine_type_id: string;
+  created_at: string;
+}
+
+export interface StockItem {
+  id: string;
+  sku: string;
+  item_name: string;
+  barcode: string;
+  quantity: number;
+  box_quantity: number;
+  pallet_quantity: number; // Added
+  units_per_box: number;
+  notes?: string; // Added
+  image_url?: string; // Added
+  is_active: boolean;
+}
+
+export interface Order {
+  id: string;
+  order_number: string;
+  delivery_date: string;
+  status: 'Pending' | 'Fulfilled' | 'Cancelled';
+  created_at: string;
+}
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  stock_barcode: string;
+  item_name: string;
+  required_quantity: number;
+  scanned_quantity: number;
+  is_fulfilled: boolean;
+}
+
+export interface ServiceCallLog {
+  id: string;
+  customer_id: string;
+  asset_id: string;
   assigned_employee_id: string;
   status: 'Open' | 'In Progress' | 'Closed';
-  // Additional fields as per typical maintenance workflow
-  notes?: string | null;
+  priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  doc_no: string;
+  do_number: string;
+  narration: string;
+  photo_url: string | null;
+  closed_remarks: string | null;
+  closed_date: string | null;
   created_at: string;
-  unified_customers?: UnifiedCustomer | null;
+}
+
+export interface User {
+  id: string;
+  full_name: string;
+  email: string;
+  role: 'admin' | 'ops_manager' | 'tech' | 'warehouse' | 'user';
+  created_at: string;
 }

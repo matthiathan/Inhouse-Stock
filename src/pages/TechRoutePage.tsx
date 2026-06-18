@@ -1,51 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import React from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
-import { MapPin, Clock, User, Wrench, CheckCircle, Play } from 'lucide-react';
+import { MapPin, Clock, User, CheckCircle, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTechRoute, useUpdateTaskStatus } from '../features/techRoute/hooks';
 
 export function TechRoutePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: tasks = [], isLoading, error } = useTechRoute(user?.id || '');
+  const { mutate: updateStatus } = useUpdateTaskStatus();
 
-  useEffect(() => {
-    if (user) fetchTasks();
-  }, [user]);
+  if (error) {
+    toast.error("Failed to load tasks");
+  }
 
-  const fetchTasks = async () => {
-    setLoading(true);
-    const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabase
-      .from('maintenance_tickets')
-      .select('*, unified_customers(*)')
-      .eq('tech_id', user?.id)
-      .neq('status', 'Closed')
-      .gte('scheduled_time', `${today}T00:00:00Z`)
-      .lte('scheduled_time', `${today}T23:59:59Z`)
-      .order('scheduled_time', { ascending: true });
-
-    if (error) {
-        toast.error("Failed to load tasks");
-    } else {
-        setTasks(data || []);
-    }
-    setLoading(false);
-  };
-
-  const updateStatus = async (id: string, newStatus: string) => {
-    const { error } = await supabase.from('maintenance_tickets').update({ status: newStatus }).eq('id', id);
-    if (error) {
-        toast.error("Failed to update status");
-    } else {
-        toast.success("Status updated");
-        fetchTasks();
-    }
-  };
-
-  if (loading) return <div>Loading...</div>;
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <div className="p-4 space-y-4">
@@ -76,7 +46,7 @@ export function TechRoutePage() {
 
              <div className="text-sm p-2 bg-gray-50 rounded-lg">
                 <div className="font-semibold text-gray-800">Issue:</div>
-                {task.description}
+                {task.issue_description}
              </div>
 
              <div className="flex gap-2 pt-2">
@@ -85,7 +55,7 @@ export function TechRoutePage() {
                 </a>
                 
                 {task.status !== 'In Progress' && (
-                    <button onClick={() => updateStatus(task.id, 'In Progress')} className="flex-1 bg-blue-600 text-white p-3 rounded-lg flex items-center justify-center gap-2 font-medium">
+                    <button onClick={() => updateStatus({ id: task.id, status: 'In Progress' })} className="flex-1 bg-blue-600 text-white p-3 rounded-lg flex items-center justify-center gap-2 font-medium">
                         <Play size={18} /> Start
                     </button>
                 )}

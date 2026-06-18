@@ -9,6 +9,9 @@ import { toast } from 'sonner';
 import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineModels, getNextFADocSequence, getStockByBarcode, deductStockQuantity, deleteStockItem, archiveStockItem } from '../api/assetApi';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { useStock } from '../features/inventory/hooks';
+import { Button } from '../components/ui/Button';
+import { useQueryClient } from '@tanstack/react-query';
 
 export { AnalyticsPage } from './AnalyticsPage';
 export { AssetDetailsPage } from './AssetDetailsPage';
@@ -20,8 +23,18 @@ export { default as SCLTechClosurePage } from './SCLTechClosurePage';
 
 export function StockPage() {
   const { role } = useAuth();
+  const queryClient = useQueryClient();
+  const { data: hookStockItems = [], isLoading: hookLoading, error } = useStock();
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detectedTable, setDetectedTable] = useState<'stock' | 'inventory' | 'local'>('stock');
+
+  useEffect(() => {
+    if (hookStockItems.length !== stockItems.length || hookLoading !== loading) {
+       setStockItems(hookStockItems);
+       setLoading(hookLoading);
+    }
+  }, [hookStockItems, hookLoading]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [dispatchItem, setDispatchItem] = useState<any>(null);
@@ -29,7 +42,6 @@ export function StockPage() {
   const [dispatchBoxes, setDispatchBoxes] = useState('');
   const [dispatchUnits, setDispatchUnits] = useState('');
   const [dispatching, setDispatching] = useState(false);
-  const [detectedTable, setDetectedTable] = useState<'stock' | 'inventory' | 'local'>('local');
 
   // Form states (deprecated in favor of react-hook-form)
   const { register, handleSubmit, reset, setValue, watch } = useForm<ReceiveStockSchema>({
