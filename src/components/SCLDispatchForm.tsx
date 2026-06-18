@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { unifiedCustomerRepository } from '../features/customers/repository';
+import { customerRepository } from '../services/api/customerRepository';
+import { useQuery } from '@tanstack/react-query';
 import { userRepository } from '../features/users/repository';
 import { assetRepository } from '../services/api/assetRepository';
 import { sclRepository } from '../features/dispatch/repository';
@@ -17,7 +18,11 @@ import {
 } from '../utils/sclStateMachine';
 
 export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
-  const [customers, setCustomers] = useState<any[]>([]);
+  const { data: customers = [], isLoading: isCustomersLoading } = useQuery({
+    queryKey: ['customers'],
+    queryFn: () => customerRepository.getAllCustomers()
+  });
+
   const [techs, setTechs] = useState<any[]>([]);
   const [machines, setMachines] = useState<any[]>([]);
   const [filteredMachines, setFilteredMachines] = useState<any[]>([]);
@@ -52,13 +57,11 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
   // Fetch customer, tech and machine data
   const fetchData = async () => {
     try {
-      const [cData, tData, mData] = await Promise.all([
-        unifiedCustomerRepository.getAll(),
+      const [tData, mData] = await Promise.all([
         userRepository.getTechnicians(),
         assetRepository.getAll()
       ]);
 
-      if (cData) setCustomers(cData);
       if (tData) setTechs(tData);
       if (mData) setMachines(mData);
     } catch (err: any) {
@@ -257,10 +260,10 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
           control={control}
           render={({ field }) => (
             <ComboBox
-              options={customers.map(c => ({ label: `${c.name} (${c.code || 'No Code'})`, value: c.id }))}
+              options={customers.map(c => ({ label: `${c.name} (${c.region || c.code || 'No Code'})`, value: c.id }))}
               value={field.value}
               onChange={field.onChange}
-              placeholder="Search and select customer..."
+              placeholder={isCustomersLoading ? "Loading customers..." : "Search and select customer..."}
             />
           )}
         />

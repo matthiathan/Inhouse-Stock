@@ -1,11 +1,25 @@
 
-import { BaseRepository } from './baseRepository';
-import { Customer } from '../../types';
+import { supabase } from '../../lib/supabase';
 
-export class CustomerRepository extends BaseRepository<Customer> {
-  constructor() {
-    super('customers');
+export const customerRepository = {
+  // Fetch from the new View instead of hardcoded tables
+  async getAllCustomers() {
+    const { data, error } = await supabase
+      .from('vw_customers_combined')
+      .select('*');
+      
+    if (error) throw error;
+    return data;
+  },
+
+  async searchCustomers(term: string) {
+    const { data, error } = await supabase
+      .from('vw_customers_combined')
+      .select('*')
+      .ilike('name', `%${term}%`); // Case-insensitive search across all regions
+      
+    if (error) throw error;
+    return data;
   }
-}
+};
 
-export const customerRepository = new CustomerRepository();
