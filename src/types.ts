@@ -98,11 +98,13 @@ export interface ServiceCallLog {
   [key: string]: any;
 }
 
+export type AppRole = 'admin' | 'ops_manager' | 'tech' | 'warehouse' | 'user' | 'road_tech' | 'finance';
+
 export interface User {
   id: string;
   full_name: string;
   email: string;
-  role: 'admin' | 'ops_manager' | 'tech' | 'warehouse' | 'user' | 'road_tech';
+  role: AppRole;
   latitude: number;
   longitude: number;
   created_at: string;

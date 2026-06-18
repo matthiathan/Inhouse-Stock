@@ -6,7 +6,8 @@ import {
   BarChart3, 
   Map, 
   MapPin,
-  ClipboardList
+  ClipboardList,
+  ShieldAlert
 } from 'lucide-react';
 
 export const ALL_NAV_ITEMS = [
@@ -19,5 +20,6 @@ export const ALL_NAV_ITEMS = [
   { name: 'Assets', path: '/assets', icon: Database, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'road_tech', 'user'] },
   { name: 'Scanner', path: '/scanner', icon: QrCode, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'road_tech', 'user'] },
   { name: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['admin', 'ops_manager'] },
+  { name: 'Finance Audit', path: '/finance-audit', icon: ShieldAlert, roles: ['admin', 'finance'] },
   { name: 'Settings', path: '/settings', icon: Settings, roles: ['admin', 'ops_manager'] },
 ];

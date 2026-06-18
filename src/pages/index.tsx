@@ -28,6 +28,7 @@ export { OrderFulfillmentPage } from './OrderFulfillmentPage';
 export { RoutePlannerPage } from './RoutePlannerPage';
 export { TechRoutePage } from './TechRoutePage';
 export { default as SCLTechClosurePage } from './SCLTechClosurePage';
+export { default as ServiceBillingReport } from './ServiceBillingReport';
 
 export function StockPage() {
   const { role } = useAuth();
