@@ -7,7 +7,8 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import DashboardLayout from './components/layout/DashboardLayout';
-import { StockPage, AssetsPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage, OrderFulfillmentPage, RoutePlannerPage, TechRoutePage } from './pages';
+import { SCLDispatchForm } from './components/SCLDispatchForm';
+import { StockPage, AssetsPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage, OrderFulfillmentPage, RoutePlannerPage, TechRoutePage, SCLTechClosurePage } from './pages';
 import { useAuth } from './hooks/useAuth';
 
 interface RoleProtectedRouteProps {
@@ -121,10 +122,26 @@ export default function App() {
             } 
           />
           <Route 
+            path="dispatch" 
+            element={
+              <RoleProtectedRoute allowedRoles={['admin', 'ops_manager']}>
+                <SCLDispatchForm />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
             path="my-route" 
             element={
               <RoleProtectedRoute allowedRoles={['tech']}>
                 <TechRoutePage />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
+            path="tech-closure/:id" 
+            element={
+              <RoleProtectedRoute allowedRoles={['tech']}>
+                <SCLTechClosurePage />
               </RoleProtectedRoute>
             } 
           />

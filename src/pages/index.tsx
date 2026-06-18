@@ -16,6 +16,7 @@ export { OrdersPage } from './OrdersPage';
 export { OrderFulfillmentPage } from './OrderFulfillmentPage';
 export { RoutePlannerPage } from './RoutePlannerPage';
 export { TechRoutePage } from './TechRoutePage';
+export { default as SCLTechClosurePage } from './SCLTechClosurePage';
 
 export function StockPage() {
   const { role } = useAuth();

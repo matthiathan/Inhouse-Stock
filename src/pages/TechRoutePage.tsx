@@ -3,9 +3,11 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { MapPin, Clock, User, Wrench, CheckCircle, Play } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export function TechRoutePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -88,7 +90,7 @@ export function TechRoutePage() {
                     </button>
                 )}
                 
-                <button className="flex-1 bg-green-600 text-white p-3 rounded-lg flex items-center justify-center gap-2 font-medium">
+                <button onClick={() => navigate(`/tech-closure/${task.id}`)} className="flex-1 bg-green-600 text-white p-3 rounded-lg flex items-center justify-center gap-2 font-medium">
                     <CheckCircle size={18} /> Complete
                 </button>
              </div>
