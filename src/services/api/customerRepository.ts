@@ -12,6 +12,16 @@ export const customerRepository = {
     return data;
   },
 
+  async getCustomersByRegion(region: 'KZN' | 'JHB' | 'CPT') {
+    const { data, error } = await supabase
+      .from('vw_customers_combined')
+      .select('*')
+      .eq('region', region);
+      
+    if (error) throw error;
+    return data;
+  },
+
   async searchCustomers(term: string) {
     const { data, error } = await supabase
       .from('vw_customers_combined')

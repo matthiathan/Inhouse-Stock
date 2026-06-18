@@ -19,10 +19,19 @@ import {
 } from '../utils/sclStateMachine';
 
 export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
+  const [region, setRegion] = useState<'KZN' | 'JHB' | 'CPT'>('KZN');
+
   const { data: customers = [], isLoading: isCustomersLoading } = useQuery({
-    queryKey: ['customers'],
-    queryFn: () => customerRepository.getAllCustomers()
+    queryKey: ['customers', region],
+    queryFn: () => customerRepository.getCustomersByRegion(region)
   });
+
+  const handleRegionChange = (newRegion: 'KZN' | 'JHB' | 'CPT') => {
+    setRegion(newRegion);
+    setValue('customer_id', '');
+    setValue('serial_number', '');
+    setValue('qrcode', '');
+  };
 
   const [techs, setTechs] = useState<any[]>([]);
   const [machines, setMachines] = useState<any[]>([]);
@@ -131,6 +140,19 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
     : null;
 
   const { data: contract } = useContractLookup(faDocId || undefined);
+
+  // Sync region selector to the selected machine's document region representation
+  useEffect(() => {
+    if (faDocId) {
+      if (faDocId.startsWith('CA21')) {
+        setRegion('JHB');
+      } else if (faDocId.startsWith('CA31')) {
+        setRegion('CPT');
+      } else if (faDocId.startsWith('CA41')) {
+        setRegion('KZN');
+      }
+    }
+  }, [faDocId]);
 
   useEffect(() => {
     if (contract) {
@@ -291,6 +313,26 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
             )}
           />
           {errors.do_number && <p className="text-red-500 text-xs mt-1">{errors.do_number.message}</p>}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-gray-500">Division / Region</label>
+        <div className="flex gap-2">
+          {(['KZN', 'JHB', 'CPT'] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => handleRegionChange(r)}
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all duration-200 ${
+                region === r 
+                  ? 'bg-brand-gold text-white border-brand-gold shadow-sm font-bold' 
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              {r}
+            </button>
+          ))}
         </div>
       </div>
 

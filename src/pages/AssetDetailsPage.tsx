@@ -368,7 +368,17 @@ export function AssetDetailsPage() {
                             <div id="qr-reader" className="w-full overflow-hidden rounded-lg border border-brand-border" />
                             <button type="button" onClick={() => {
                                 setIsScanning(true);
-                                const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: {width: 200, height: 200} }, false);
+                                const scanner = new Html5QrcodeScanner("qr-reader", {
+                                    fps: 10,
+                                    qrbox: { width: 220, height: 220 },
+                                    aspectRatio: 1.0,
+                                    videoConstraints: {
+                                        facingMode: { exact: "environment" },
+                                        width: { ideal: 1920 },
+                                        height: { ideal: 1080 },
+                                        focusMode: "continuous"
+                                    } as any
+                                }, false);
                                 scanner.render((decodedText) => {
                                     if(decodedText === asset?.qr_code) {
                                         setQrVerified(true);

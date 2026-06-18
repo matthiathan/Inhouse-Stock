@@ -4,7 +4,18 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 export const useScanner = (
   elementId: string,
   onScanSuccess: (decodedText: string) => void,
-  config = { fps: 10, qrbox: { width: 250, height: 250 } }
+  config: any = {
+    fps: 10,
+    qrbox: { width: 250, height: 250 },
+    aspectRatio: 1.0,
+    // Force the back camera and high resolution
+    videoConstraints: {
+      facingMode: { exact: "environment" },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      focusMode: "continuous" as any
+    }
+  }
 ) => {
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
@@ -29,5 +40,5 @@ export const useScanner = (
         scannerRef.current = null;
       }
     };
-  }, [elementId, onScanSuccess]);
+  }, [elementId, onScanSuccess, config]);
 };

@@ -61,7 +61,17 @@ export function OrdersPage() {
 
   useEffect(() => {
     if (isScannerOpen && activeOrder) {
-      const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+      const scanner = new Html5QrcodeScanner("qr-reader", {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0,
+        videoConstraints: {
+          facingMode: { exact: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          focusMode: "continuous"
+        } as any
+      }, false);
       scannerRef.current = scanner;
       scanner.render(fulfillItem, (err) => {
           if (err.includes("NotFoundException") || err.includes("No MultiFormat Readers")) return;

@@ -1341,11 +1341,11 @@ export function ScannerPage() {
   const navigate = useNavigate();
   const [errorStatus, setErrorStatus] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const { torchOn, toggleTorch, error: torchError } = useTorch();
+  const scannerRef = React.useRef<Html5Qrcode | null>(null);
+  const { torchOn, setTorchOn, toggleTorch, error: torchError } = useTorch(scannerRef);
   const isProcessingRef = React.useRef(false);
   const [scannedMachine, setScannedMachine] = useState<Machine | null>(null);
   const [unrecognizedQr, setUnrecognizedQr] = useState<string | null>(null);
-  const scannerRef = React.useRef<Html5Qrcode | null>(null);
 
   const Maps = navigate;
 
@@ -1485,6 +1485,7 @@ export function ScannerPage() {
 
     return () => {
       isMounted = false;
+      setTorchOn(false);
       startPromise.then(() => {
         try {
           if (isScanning || html5QrCode.isScanning) {
