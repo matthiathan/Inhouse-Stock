@@ -7,7 +7,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import DashboardLayout from './components/layout/DashboardLayout';
-import { StockPage, AssetsPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage } from './pages';
+import { StockPage, AssetsPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage, OrderFulfillmentPage, RoutePlannerPage, TechRoutePage } from './pages';
 import { useAuth } from './hooks/useAuth';
 
 interface RoleProtectedRouteProps {
@@ -84,6 +84,14 @@ export default function App() {
               </RoleProtectedRoute>
             } 
           />
+          <Route 
+            path="fulfillment" 
+            element={
+              <RoleProtectedRoute allowedRoles={['warehouse']}>
+                <OrderFulfillmentPage />
+              </RoleProtectedRoute>
+            } 
+          />
           <Route path="assets" element={<AssetsPage />} />
           <Route path="assets/:id" element={<AssetDetailsPage />} />
           <Route path="customers/:code" element={<CustomerDetailsPage />} />
@@ -93,6 +101,22 @@ export default function App() {
             element={
               <RoleProtectedRoute allowedRoles={['admin', 'ops_manager']}>
                 <AnalyticsPage />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
+            path="routes" 
+            element={
+              <RoleProtectedRoute allowedRoles={['admin', 'ops_manager']}>
+                <RoutePlannerPage />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
+            path="tech-route" 
+            element={
+              <RoleProtectedRoute allowedRoles={['tech']}>
+                <TechRoutePage />
               </RoleProtectedRoute>
             } 
           />

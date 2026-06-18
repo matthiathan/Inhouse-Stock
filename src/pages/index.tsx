@@ -6,13 +6,16 @@ import { receiveStockSchema, ReceiveStockSchema } from '../lib/schemas';
 import { Machine, Customer, Section } from '../types';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { toast } from 'sonner';
-import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineModels, getNextFADocSequence, getStockByBarcode, deductStockQuantity } from '../api/assetApi';
+import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineModels, getNextFADocSequence, getStockByBarcode, deductStockQuantity, deleteStockItem, archiveStockItem } from '../api/assetApi';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
 export { AnalyticsPage } from './AnalyticsPage';
 export { AssetDetailsPage } from './AssetDetailsPage';
 export { OrdersPage } from './OrdersPage';
+export { OrderFulfillmentPage } from './OrderFulfillmentPage';
+export { RoutePlannerPage } from './RoutePlannerPage';
+export { TechRoutePage } from './TechRoutePage';
 
 export function StockPage() {
   const { role } = useAuth();
@@ -76,6 +79,7 @@ export function StockPage() {
         const { data: stockData, error: stockError } = await supabase
           .from('stock')
           .select('*')
+          .eq('is_active', true)
           .order('id', { ascending: false });
         
         if (!stockError && stockData) {
@@ -246,29 +250,42 @@ export function StockPage() {
   };
 
   const handleDeleteStock = async (item: any) => {
-    if (!window.confirm("Are you sure you want to delete this stock item?")) return;
+    /*
+    if (!window.confirm("Are you sure you want to archive this stock item?")) return;
     
+    if (detectedTable === 'local') {
+        const updated = stockItems.filter(i => i.id !== item.id);
+        localStorage.setItem('local_stock', JSON.stringify(updated));
+        setStockItems(updated);
+        toast.success("Stock deleted locally successfully!");
+        return;
+    }
+
     try {
-        const { error } = await supabase
-          .from(detectedTable === 'stock' ? 'stock' : 'inventory')
-          .delete()
-          .eq('id', item.id);
-        
-        if (error) throw error;
-        
-        toast.success("Stock deleted successfully!");
+        if (detectedTable === 'stock') {
+            await archiveStockItem(Number(item.id));
+            toast.success("Stock archived successfully!");
+        } else {
+            await deleteStockItem(item.id, item.image_url, detectedTable);
+            toast.success("Stock deleted successfully from database!");
+        }
 
         // Refresh
-        const { data: refreshed } = await supabase
-          .from(detectedTable === 'stock' ? 'stock' : 'inventory')
-          .select('*')
-          .order('id', { ascending: false });
+        const table = (detectedTable === 'stock' ? 'stock' : 'inventory');
+        let query = supabase.from(table).select('*').order('id', { ascending: false });
+        
+        if (detectedTable === 'stock') {
+            query = query.eq('is_active', true);
+        }
+
+        const { data: refreshed } = await query;
         if (refreshed) {
           setStockItems(refreshed);
         }
     } catch (err: any) {
-        toast.error(err.message || "Error deleting stock");
+        toast.error(err.message || "Error processing stock");
     }
+    */
   };
 
   const filteredItems = stockItems.filter(item => {
@@ -286,12 +303,14 @@ export function StockPage() {
           <h1 className="text-2xl font-bold text-text-primary">Stock Inventory</h1>
           <p className="text-text-secondary">Manage and track your stock levels across departments.</p>
         </div>
-        <button 
-          onClick={() => { reset(); setIsModalOpen(true); }}
-          className="bg-brand-gold text-white px-5 py-2.5 min-h-[44px] rounded-lg font-medium hover:bg-brand-gold/90 transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer whitespace-nowrap self-start sm:self-auto"
-        >
-          <span className="text-lg font-bold">+</span> Receive Stock
-        </button>
+        {(role === 'admin' || role === 'warehouse_staff') && (
+          <button 
+            onClick={() => { reset(); setIsModalOpen(true); }}
+            className="bg-brand-gold text-white px-5 py-2.5 min-h-[44px] rounded-lg font-medium hover:bg-brand-gold/90 transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer whitespace-nowrap self-start sm:self-auto"
+          >
+            <span className="text-lg font-bold">+</span> Receive Stock
+          </button>
+        )}
       </header>
 
       {/* Toolbar / Search */}
@@ -366,7 +385,7 @@ export function StockPage() {
                       {qty} units
                     </span>
                     {(role === 'admin' || role === 'ops_manager') && (
-                      <button onClick={() => handleDeleteStock(item)} className="bg-red-900/20 text-red-500 px-2 py-1 rounded text-xs font-semibold cursor-pointer shrink-0">Delete</button>
+                      null
                     )}
                   </div>
 
@@ -435,10 +454,6 @@ export function StockPage() {
                         </div>
                       </td>
                       <td className="p-4 text-right flex items-center justify-end gap-2">
-                        <button onClick={() => { setDispatchItem(item); setIsDispatchModalOpen(true); }} className="bg-brand-gold hover:bg-brand-gold/90 text-white text-xs px-2.5 py-1.5 rounded cursor-pointer">Dispatch</button>
-                        {(role === 'admin' || role === 'ops_manager') && (
-                            <button onClick={() => handleDeleteStock(item)} className="bg-red-900/20 text-red-500 hover:bg-red-900/30 text-xs px-2.5 py-1.5 rounded cursor-pointer">Delete</button>
-                        )}
                       </td>
                     </tr>
                   );

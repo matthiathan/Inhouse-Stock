@@ -332,3 +332,61 @@ export const updateStockQuantities = async (barcode: string, totalUnits: number)
   }
   return data;
 };
+
+export async function deleteStockItem(stockId: string, imagePath?: string, tableName: string = 'stock') {
+  try {
+    // 1. Delete image from storage if it exists & provided
+    if (imagePath && imagePath.includes('/storage/v1/object/public/')) {
+        const parts = imagePath.split('/storage/v1/object/public/')[1].split('/');
+        const bucket = parts[0];
+        const path = parts.slice(1).join('/');
+        
+        if (path) {
+            const { error: storageError } = await supabase.storage.from(bucket).remove([path]);
+            if (storageError) {
+                console.warn("Could not delete associated image:", storageError);
+            }
+        }
+    }
+
+    // 2. Delete database record
+    const { error: dbError } = await supabase
+      .from(tableName)
+      .delete()
+      .eq('id', stockId);
+    
+    if (dbError) throw dbError;
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting stock item:", error);
+    throw error;
+  }
+}
+
+export const archiveStockItem = async (stockId: number) => {
+  try {
+    const { error } = await supabase
+      .from('stock')
+      .update({ is_active: false })
+      .eq('id', stockId);
+
+    if (error) throw new Error(error.message);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+};
+
+export const createMaintenanceTicket = async (ticketData: any) => {
+  try {
+    const { data, error } = await supabase
+      .from('maintenance_tickets')
+      .insert([ticketData]);
+
+    if (error) throw new Error(error.message);
+    return { success: true, data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+};
