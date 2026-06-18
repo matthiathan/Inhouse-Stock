@@ -46,3 +46,10 @@ export class RouteService {
 }
 
 export const routeService = new RouteService();
+
+export const getTableByPrefix = (faDocId: string) => {
+  if (faDocId.startsWith('CA21')) return 'jhb_contracts';
+  if (faDocId.startsWith('CA31')) return 'cpt_contracts';
+  if (faDocId.startsWith('CA41')) return 'kzn_contracts';
+  return null;
+};

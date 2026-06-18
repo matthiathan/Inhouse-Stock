@@ -8,6 +8,7 @@ import { assetRepository } from '../services/api/assetRepository';
 import { sclRepository } from '../features/dispatch/repository';
 import { toast } from 'sonner';
 import { sclSchema, SclSchemaValue } from '../features/dispatch/schema';
+import { useContractLookup } from '../features/dispatch/hooks';
 import { ComboBox } from './ui/ComboBox';
 import { AlertCircle, ShieldAlert, CheckCircle, RefreshCcw } from 'lucide-react';
 import { 
@@ -122,6 +123,46 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
       setIsBlocked(false);
     }
   }, [selectedSerialNumber, machines, setValue]);
+
+  // Derive contract document reference and fetch details
+  const selectedMachine = machines.find(m => m.serial_number === selectedSerialNumber);
+  const faDocId = selectedMachine 
+    ? (selectedMachine['FA Doc#'] || selectedMachine['Contract#'] || selectedMachine.contractNo || selectedMachine.faDocNo || selectedMachine.fa_doc_id || selectedMachine.contract_no) 
+    : null;
+
+  const { data: contract } = useContractLookup(faDocId || undefined);
+
+  useEffect(() => {
+    if (contract) {
+      // Auto-fill customer if a match is found based on customer name or customer code
+      const contractCustomerCode = contract.customer_code || contract['Customer Code'] || contract['cust_code'] || contract['cust_no'];
+      const contractCustomerName = contract.customer_name || contract['Customer Name'] || contract['client_name'];
+      
+      const matchedCustomer = customers.find(c => {
+        if (contractCustomerCode && c.code && String(c.code).toLowerCase() === String(contractCustomerCode).toLowerCase()) {
+          return true;
+        }
+        if (contractCustomerName && c.name && String(c.name).toLowerCase() === String(contractCustomerName).toLowerCase()) {
+          return true;
+        }
+        return false;
+      });
+
+      if (matchedCustomer) {
+        setValue('customer_id', matchedCustomer.id);
+      }
+
+      // Map agreement/contract type to standard service type
+      const aggType = (contract.agreement_type || contract.service_type || contract['Service Type'] || contract['Agreement Type'] || '').toLowerCase();
+      if (aggType.includes('install')) {
+        setValue('service_type', 'Installation');
+      } else if (aggType.includes('repair') || aggType.includes('break') || aggType.includes('corr')) {
+        setValue('service_type', 'Repair');
+      } else {
+        setValue('service_type', 'Maintenance');
+      }
+    }
+  }, [contract, customers, setValue]);
 
   const handleManagerApprove = () => {
     if (activeSerial) {
