@@ -4,6 +4,7 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Camera, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { validateSclTransition, logStateTransition, SclStatus } from '../utils/sclStateMachine';
 
 export default function SCLTechClosurePage() {
   const { sclId } = useParams<{ sclId: string }>();
@@ -13,6 +14,7 @@ export default function SCLTechClosurePage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [notes, setNotes] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [sclRecord, setSclRecord] = useState<any>(null);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   useEffect(() => {
@@ -44,6 +46,9 @@ export default function SCLTechClosurePage() {
 
     // 2. Fetch SCL to get expected customer/asset info for validation if needed
     const { data: scl } = await supabase.from('service_call_logs').select('*').eq('id', sclId).single();
+    if (scl) {
+        setSclRecord(scl);
+    }
 
     // 3. Simple validation (adjust logic as per business rules)
     if (scl && machine.customer_code !== scl.customer_code) {
@@ -59,6 +64,17 @@ export default function SCLTechClosurePage() {
     if (!photoFile || !notes) {
       toast.error('Please add notes and a photo');
       return;
+    }
+
+    // Validate with State Machine
+    const validation = validateSclTransition(
+       (sclRecord?.current_status || sclRecord?.status || 'Open') as SclStatus,
+       'Closed',
+       notes
+    );
+    if (!validation.valid) {
+       toast.error(validation.error || 'Transition invalid');
+       return;
     }
 
     setStep(3);
@@ -86,6 +102,7 @@ export default function SCLTechClosurePage() {
         serial_number: scannedMachine.serial_number,
         qrcode: scannedMachine.qr_code,
         current_status: 'Closed',
+        status: 'Closed',
         closed_date: new Date().toISOString()
       })
       .eq('id', sclId);
@@ -95,6 +112,17 @@ export default function SCLTechClosurePage() {
       setStep(2);
     } else {
       toast.success('Task closed successfully');
+      
+      // Resilient transition auditing
+      await logStateTransition(
+         sclId!,
+         (sclRecord?.current_status || sclRecord?.status || 'Open') as SclStatus,
+         'Closed',
+         sclRecord?.assigned_employee_id || 'tech',
+         sclRecord?.assigned_employee || 'Technician',
+         notes
+      );
+
       navigate('/my-route');
     }
   };

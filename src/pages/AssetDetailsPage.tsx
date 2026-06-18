@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { Machine, Section } from '../types';
 import { updateAssetSection } from '../api/assetApi';
 import { createMaintenanceTicket, closeMaintenanceTicket } from '../api/maintenance';
+import { uploadAssetPhoto } from '../lib/storage';
 import { toast } from 'sonner';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { 
@@ -51,6 +52,32 @@ export function AssetDetailsPage() {
     const [selectedSection, setSelectedSection] = useState('');
     const [saving, setSaving] = useState(false);
     const [searchParams] = useSearchParams();
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, assetId: string) => {
+        if (e.target.files && e.target.files[0]) {
+            setUploadingPhoto(true);
+            try {
+                const publicUrl = await uploadAssetPhoto(e.target.files[0], assetId);
+                
+                // Update database record with the new URL
+                const { error } = await supabase
+                    .from('machines')
+                    .update({ photo_url: publicUrl })
+                    .eq('id', assetId);
+
+                if (error) throw error;
+                
+                // Update local state
+                setAsset(prev => prev ? { ...prev, photo_url: publicUrl } as any : null);
+                toast.success('Photo uploaded successfully');
+            } catch (err: any) {
+                toast.error('Upload failed: ' + err.message);
+            } finally {
+                setUploadingPhoto(false);
+            }
+        }
+    };
 
     const fetchTickets = async () => {
         if (!id) return;
@@ -182,7 +209,7 @@ export function AssetDetailsPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                 {/* Identifiers Card */}
                 <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between">
                     <div>
@@ -209,6 +236,40 @@ export function AssetDetailsPage() {
                             ) : (
                                 <button onClick={() => { setIsModalOpen(true); fetchSections(); }} className="text-brand-gold text-sm font-medium hover:underline text-left cursor-pointer min-h-[32px] py-1">Change Section</button>
                             )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Asset Photo Card */}
+                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between gap-4">
+                    <div>
+                        <h3 className="font-bold text-text-primary mb-3 flex items-center gap-1.5">
+                            <Camera size={16} className="text-brand-gold" /> Asset Photo
+                        </h3>
+                        {uploadingPhoto ? (
+                            <div className="border border-brand-gold/30 rounded-lg h-36 flex flex-col items-center justify-center bg-bg-base text-brand-gold text-xs">
+                                <span className="animate-spin mb-2 text-lg">⏳</span>
+                                <span>Uploading image...</span>
+                            </div>
+                        ) : (asset as any).photo_url ? (
+                            <div className="relative group rounded-lg overflow-hidden border border-brand-border h-36 bg-bg-base flex items-center justify-center shadow-inner">
+                                <img src={(asset as any).photo_url} alt={asset.asset_name} className="h-full w-full object-cover" />
+                            </div>
+                        ) : (
+                            <div className="border border-dashed border-brand-border rounded-lg h-36 flex flex-col items-center justify-center bg-bg-base text-text-secondary text-xs">
+                                <Camera size={24} className="mb-2 text-text-secondary/50" />
+                                <span>No Asset Photograph</span>
+                            </div>
+                        )}
+                        <div className="mt-3">
+                            <label className="block text-[10px] uppercase font-bold text-text-secondary tracking-wider mb-1">Upload New Photo</label>
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              capture="environment" 
+                              onChange={(e) => handleFileChange(e, asset.id)}
+                              className="block w-full text-xs text-text-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-brand-gold file:text-white file:text-xs file:font-semibold hover:file:bg-brand-gold/90 transition-all cursor-pointer"
+                            />
                         </div>
                     </div>
                 </div>

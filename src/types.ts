@@ -26,6 +26,8 @@ export interface Customer {
   region: Region;
   code: string;
   address: string;
+  latitude: number;
+  longitude: number;
   details: Record<string, any>;
   created_at: string;
 }
@@ -93,5 +95,23 @@ export interface User {
   full_name: string;
   email: string;
   role: 'admin' | 'ops_manager' | 'tech' | 'warehouse' | 'user';
+  latitude: number;
+  longitude: number;
   created_at: string;
+}
+
+export interface Machine {
+  id: string;
+  serial_number: string;
+  qr_code: string;
+  asset_name: string;
+  section: string;
+  photo_url?: string | null;
+  [key: string]: any;
+}
+
+export interface Section {
+  id: string;
+  section_name: string;
+  [key: string]: any;
 }
