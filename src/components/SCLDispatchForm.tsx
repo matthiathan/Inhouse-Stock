@@ -8,9 +8,10 @@ import { assetRepository } from '../services/api/assetRepository';
 import { sclRepository } from '../features/dispatch/repository';
 import { toast } from 'sonner';
 import { sclSchema, SclSchemaValue } from '../features/dispatch/schema';
-import { useContractLookup } from '../features/dispatch/hooks';
+import { useContractLookup, useSubmitSCL } from '../features/dispatch/hooks';
 import { ComboBox } from './ui/ComboBox';
 import { AlertCircle, ShieldAlert, CheckCircle, RefreshCcw } from 'lucide-react';
+import { DB_COLS } from '../constants/db';
 import { 
   checkAssetThresholds, 
   isAssetDispatchDisabled, 
@@ -20,6 +21,7 @@ import {
 
 export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
   const [region, setRegion] = useState<'KZN' | 'JHB' | 'CPT'>('KZN');
+  const submitSclMutation = useSubmitSCL();
 
   const { data: customers = [], isLoading: isCustomersLoading } = useQuery({
     queryKey: ['contract-customers', region],
@@ -144,7 +146,7 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
   // Derive contract document reference and fetch details
   const selectedMachine = machines.find(m => m.serial_number === selectedSerialNumber);
   const faDocId = selectedMachine 
-    ? (selectedMachine['FA Doc#'] || selectedMachine['Contract#'] || selectedMachine.contractNo || selectedMachine.faDocNo || selectedMachine.fa_doc_id || selectedMachine.contract_no) 
+    ? (selectedMachine[DB_COLS.FA_DOC_NO.replace(/"/g, '')] || selectedMachine[DB_COLS.CONTRACT_NUM.replace(/"/g, '')] || selectedMachine.contractNo || selectedMachine.faDocNo || selectedMachine.fa_doc_id || selectedMachine.contract_no) 
     : null;
 
   const { data: contract } = useContractLookup(faDocId || undefined);
@@ -165,8 +167,8 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
   useEffect(() => {
     if (contract) {
       // Auto-fill customer if a match is found based on customer name or customer code
-      const contractCustomerCode = contract.customer_code || contract['Customer Code'] || contract['cust_code'] || contract['cust_no'];
-      const contractCustomerName = contract.customer_name || contract['Customer Name'] || contract['client_name'];
+      const contractCustomerCode = contract.customer_code || contract[DB_COLS.CUSTOMER_CODE_ALT.replace(/"/g, '')] || contract[DB_COLS.CUST_CODE.replace(/"/g, '')] || contract[DB_COLS.CUST_NO.replace(/"/g, '')];
+      const contractCustomerName = contract.customer_name || contract[DB_COLS.CUSTOMER_NAME.replace(/"/g, '')] || contract['client_name'];
       
       const matchedCustomer = customers.find(c => {
         if (contractCustomerCode && c.code && String(c.code).toLowerCase() === String(contractCustomerCode).toLowerCase()) {
@@ -183,7 +185,7 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
       }
 
       // Map agreement/contract type to standard service type
-      const aggType = (contract.agreement_type || contract.service_type || contract['Service Type'] || contract['Agreement Type'] || '').toLowerCase();
+      const aggType = (contract.agreement_type || contract.service_type || contract[DB_COLS.SERVICE_TYPE.replace(/"/g, '')] || contract[DB_COLS.AGREEMENT_TYPE.replace(/"/g, '')] || '').toLowerCase();
       if (aggType.includes('install')) {
         setValue('service_type', 'Installation');
       } else if (aggType.includes('repair') || aggType.includes('break') || aggType.includes('corr')) {
@@ -233,31 +235,35 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
       assigned_date_time: new Date().toISOString(),
     };
 
-    try {
-      const insertData = await sclRepository.create(payload as any);
-      
-      if (!insertData) {
-        toast.error('Failed to dispatch service call: Empty database response');
-      } else {
+    submitSclMutation.mutate(payload, {
+      onSuccess: async (insertData) => {
         toast.success('Service call logged and dispatched successfully!');
         
         // Audit log action
         if (insertData && insertData.id) {
-          await logStateTransition(
-            insertData.id,
-            'None',
-            data.current_status,
-            data.assigned_employee_id,
-            techName,
-            'Initial SCL Dispatch Creation'
-          );
+          try {
+            await logStateTransition(
+              insertData.id,
+              'None',
+              data.current_status,
+              data.assigned_employee_id,
+              techName,
+              'Initial SCL Dispatch Creation'
+            );
+          } catch (auditErr) {
+            console.warn("Audit log failed (might be offline):", auditErr);
+          }
         }
 
         onSuccess?.();
+      },
+      onError: (err: any) => {
+        if (err.message === 'OFFLINE_SAVED') {
+           // handled by hook toast
+           onSuccess?.(); // Close modal anyway since it's saved offline
+        }
       }
-    } catch (err: any) {
-      toast.error('Dispatch API error: ' + err.message);
-    }
+    });
   };
 
   return (
@@ -519,10 +525,10 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
 
       <button 
         type="submit" 
-        disabled={isSubmitting || isBlocked} 
+        disabled={isSubmitting || submitSclMutation.isPending || isBlocked} 
         className="w-full bg-brand-gold disabled:bg-gray-200 disabled:text-gray-400 font-semibold text-white p-3 rounded-lg text-sm transition-all hover:bg-brand-gold/90 flex items-center justify-center gap-2"
       >
-        {isSubmitting ? (
+        {isSubmitting || submitSclMutation.isPending ? (
           <>
             <RefreshCcw className="w-4 h-4 animate-spin" />
             Dispatching SCL...

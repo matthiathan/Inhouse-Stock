@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { uploadAssetPhoto } from '../lib/storage';
+import { DB_COLS } from '../constants/db';
 
 export const getAssetByQR = async (qr: string) => {
   const { data, error } = await supabase
@@ -49,13 +50,13 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
   try {
     const { data: famData } = await supabase
       .from('fam')
-      .select('id, "QR Code", "Serial#"')
-      .or(`id.eq.${parsedId}${qrCode ? `,"QR Code".eq.${qrCode}` : `,"QR Code".eq.${String(id)}`}`);
+      .select(`id, ${DB_COLS.QR_CODE}, ${DB_COLS.SERIAL_NO}`)
+      .or(`id.eq.${parsedId}${qrCode ? `,${DB_COLS.QR_CODE}.eq.${qrCode}` : `,${DB_COLS.QR_CODE}.eq.${String(id)}`}`);
       
     if (famData && famData.length > 0) {
       famDbId = famData[0].id;
-      qrCode = famData[0]['QR Code'] || qrCode;
-      serialNumber = famData[0]['Serial#'] || serialNumber;
+      qrCode = famData[0][DB_COLS.QR_CODE.replace(/"/g, '')] || qrCode;
+      serialNumber = famData[0][DB_COLS.SERIAL_NO.replace(/"/g, '')] || serialNumber;
     }
   } catch (err) {
     console.warn("Resilient lookup: Failed to seek machine in 'fam' table:", err);
@@ -67,7 +68,7 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
 
   try {
     try {
-      let famQuery = supabase.from('fam').update({ "Current Location": newSectionName });
+      let famQuery = supabase.from('fam').update({ [DB_COLS.CURRENT_LOCATION]: newSectionName });
       if (famDbId) {
         famQuery = famQuery.eq('id', famDbId);
       } else {
@@ -77,10 +78,10 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
       if (famErr) console.warn("Primary fam update error:", famErr.message);
 
       if (qrCode) {
-        await supabase.from('fam').update({ "Current Location": newSectionName }).eq('QR Code', qrCode);
+        await supabase.from('fam').update({ [DB_COLS.CURRENT_LOCATION]: newSectionName }).eq(DB_COLS.QR_CODE, qrCode);
       }
       if (serialNumber) {
-        await supabase.from('fam').update({ "Current Location": newSectionName }).eq('Serial#', serialNumber);
+        await supabase.from('fam').update({ [DB_COLS.CURRENT_LOCATION]: newSectionName }).eq(DB_COLS.SERIAL_NO, serialNumber);
       }
     } catch (e) {
       console.warn("Resilient error while updating 'fam' table:", e);
@@ -151,23 +152,23 @@ export const addMachine = async (machineData: ComprehensiveMachineData) => {
     .from('fam')
     .insert([
       {
-        "FA Doc#": machineData.faDocNo || null,
-        "Asset Name": machineData.assetName,
-        "Asset Number": machineData.assetNo || null,
-        "Serial#": machineData.serialNo,
-        "QR Code": machineData.qrCode,
-        "Machine Type": machineData.machineType || null,
-        "Machine Model": machineData.machineModel || null,
-        "Current Location": machineData.section,
-        "Current Customer Name": machineData.customerName || null,
-        "C.Code": machineData.customerCode || null,
-        "Current Bldg Name": machineData.buildingName || null,
-        "Contr. Type": machineData.contractType || null,
-        "Contract#": machineData.contractNo || null,
-        "Cost Amount": machineData.costAmount ? Number(machineData.costAmount) : null,
-        "FA Code(From Navision)": machineData.navisionFaCode || null,
+        [DB_COLS.FA_DOC_NO.replace(/"/g, '')]: machineData.faDocNo || null,
+        [DB_COLS.ASSET_NAME.replace(/"/g, '')]: machineData.assetName,
+        [DB_COLS.ASSET_NUMBER.replace(/"/g, '')]: machineData.assetNo || null,
+        [DB_COLS.SERIAL_NO.replace(/"/g, '')]: machineData.serialNo,
+        [DB_COLS.QR_CODE.replace(/"/g, '')]: machineData.qrCode,
+        [DB_COLS.MACHINE_TYPE.replace(/"/g, '')]: machineData.machineType || null,
+        [DB_COLS.MACHINE_MODEL.replace(/"/g, '')]: machineData.machineModel || null,
+        [DB_COLS.CURRENT_LOCATION.replace(/"/g, '')]: machineData.section,
+        [DB_COLS.CUSTOMER_NAME.replace(/"/g, '')]: machineData.customerName || null,
+        [DB_COLS.CUSTOMER_CODE.replace(/"/g, '')]: machineData.customerCode || null,
+        [DB_COLS.BUILDING_NAME.replace(/"/g, '')]: machineData.buildingName || null,
+        [DB_COLS.CONTRACT_TYPE.replace(/"/g, '')]: machineData.contractType || null,
+        [DB_COLS.CONTRACT_NO.replace(/"/g, '')]: machineData.contractNo || null,
+        [DB_COLS.COST_AMOUNT.replace(/"/g, '')]: machineData.costAmount ? Number(machineData.costAmount) : null,
+        [DB_COLS.FA_CODE_NAVISION.replace(/"/g, '')]: machineData.navisionFaCode || null,
         "photo_url": machineData.photo_url || null,
-        "Created TS": new Date().toISOString()
+        [DB_COLS.CREATED_TS.replace(/"/g, '')]: new Date().toISOString()
       }
     ])
     .select();
@@ -222,7 +223,7 @@ export const getMachineModels = async (): Promise<string[]> => {
 export const getNextFADocSequence = async (): Promise<number> => {
   const { data, error } = await supabase
     .from('fam')
-    .select('"FA Doc#"');
+    .select(DB_COLS.FA_DOC_NO);
 
   if (error) {
     console.error("Error fetching FA Doc# sequences from fam table:", error);
@@ -232,7 +233,7 @@ export const getNextFADocSequence = async (): Promise<number> => {
   let maxSeq = 999;
   if (data) {
     data.forEach((row: any) => {
-      const docNo = row['FA Doc#'];
+      const docNo = row[DB_COLS.FA_DOC_NO.replace(/"/g, '')];
       if (docNo && typeof docNo === 'string') {
         const parts = docNo.split('/');
         if (parts.length >= 2) {
@@ -293,6 +294,22 @@ export const deductStockQuantity = async (barcode: string, unitsToDeduct: number
   const currentStock = await getStockByBarcode(barcode);
   if (!currentStock) throw new Error("Stock item not found");
 
+  // Atomic decrement via Supabase RPC to prevent race conditions
+  try {
+    const { error } = await supabase.rpc('decrement_stock', {
+      target_item_id: Number(currentStock.id),
+      decrement_amount: unitsToDeduct
+    });
+    
+    if (!error) {
+      return { success: true };
+    }
+    console.warn("Supabase RPC 'decrement_stock' failed, using fallback:", error.message);
+  } catch (err) {
+    console.warn("Supabase RPC error, using fallback logic:", err);
+  }
+
+  // Fallback: Legacy "Read-then-Write" (Vulnerable to Concurrency Overwrites)
   const currentTotalUnits = currentStock.quantity || 0;
 
   if (currentTotalUnits < unitsToDeduct) {

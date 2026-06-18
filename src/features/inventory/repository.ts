@@ -28,6 +28,19 @@ export class StockRepository extends BaseRepository<StockItem> {
     if (error) throw error;
     return data;
   }
+
+  async decrement(itemId: number, amount: number) {
+    const { error } = await supabase.rpc('decrement_stock', {
+      target_item_id: itemId,
+      decrement_amount: amount
+    });
+
+    if (error) throw error;
+  }
 }
+
+export const decrementStockItem = async (itemId: number, amount: number) => {
+  return stockRepository.decrement(itemId, amount);
+};
 
 export const stockRepository = new StockRepository();
