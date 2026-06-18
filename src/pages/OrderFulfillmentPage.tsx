@@ -1,17 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { Order, OrderItem } from '../types';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { getAvailableStock, deductStockQuantity } from '../api/assetApi';
+import { 
+  useOrdersWithItems,
+  useUpdateFulfillItem,
+  useUpdateOrderStatus
+} from '../features/orders/hooks';
 
 export function OrderFulfillmentPage() {
   const { role } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // React Query Hooks
+  const { data: dbData, isLoading: loadingOrders } = useOrdersWithItems();
+  const allOrders = dbData?.orders || [];
+  const orderItems = dbData?.orderItems || [];
+  
+  // Clean filter only "Pending" orders in client or service
+  const orders = allOrders.filter(o => o.status === 'Pending');
+
+  const updateFulfillItemMutation = useUpdateFulfillItem();
+  const updateOrderStatusMutation = useUpdateOrderStatus();
+
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [totalScannedCount, setTotalScannedCount] = useState(0);
@@ -19,18 +32,8 @@ export function OrderFulfillmentPage() {
   const [availableStockData, setAvailableStockData] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchOrders();
     fetchStock();
   }, []);
-
-  const fetchOrders = async () => {
-    setLoading(true);
-    const { data: o } = await supabase.from('orders').select('*').eq('status', 'Pending').order('created_at', { ascending: false });
-    const { data: oi } = await supabase.from('order_items').select('*');
-    if (o) setOrders(o);
-    if (oi) setOrderItems(oi);
-    setLoading(false);
-  };
 
   const fetchStock = async () => {
     const stock = await getAvailableStock();
@@ -52,16 +55,22 @@ export function OrderFulfillmentPage() {
     const newScanned = item.scanned_quantity + 1;
     const isFulfilled = newScanned >= item.required_quantity;
 
-    await supabase.from('order_items').update({
-        scanned_quantity: newScanned,
-        is_fulfilled: isFulfilled
-    }).eq('id', item.id);
-
-    setLastScannedResult({barcode, success: true, message: "Item scanned successfully"});
-    setTotalScannedCount(prev => prev + 1);
-    toast.success("Item scanned");
-    try { new Audio('/success.mp3').play(); } catch(e) {}
-    fetchOrders();
+    updateFulfillItemMutation.mutate({
+        id: item.id,
+        scannedQuantity: newScanned,
+        isFulfilled
+    }, {
+        onSuccess: () => {
+            setLastScannedResult({barcode, success: true, message: "Item scanned successfully"});
+            setTotalScannedCount(prev => prev + 1);
+            toast.success("Item scanned");
+            try { new Audio('/success.mp3').play(); } catch(e) {}
+        },
+        onError: (err: any) => {
+            setLastScannedResult({barcode, success: false, message: "Error scanned barcode: " + err.message});
+            toast.error("Failed to fulfill item");
+        }
+    });
   };
 
   const completeOrder = async () => {
@@ -77,17 +86,22 @@ export function OrderFulfillmentPage() {
         }
     }
     
-    await supabase.from('orders').update({
-        status: 'Completed',
-        completed_at: new Date().toISOString()
-    }).eq('id', activeOrder.id);
-
-    toast.success("Order completed with processed stock deductions!");
-    setIsScannerOpen(false);
-    fetchOrders();
+    updateOrderStatusMutation.mutate({
+        id: activeOrder.id,
+        status: 'Completed'
+    }, {
+        onSuccess: () => {
+            toast.success("Order completed with processed stock deductions!");
+            setIsScannerOpen(false);
+            setActiveOrder(null);
+        },
+        onError: (err: any) => {
+            toast.error("Failed to update order status: " + err.message);
+        }
+    });
   };
 
-  if (loading) return <div className="p-8">Loading...</div>;
+  if (loadingOrders) return <div className="p-8">Loading...</div>;
 
   return (
     <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">

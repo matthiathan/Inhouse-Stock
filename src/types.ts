@@ -88,16 +88,26 @@ export interface ServiceCallLog {
   closed_remarks: string | null;
   closed_date: string | null;
   created_at: string;
+  assigned_date_time?: string;
+  serial_number?: string;
+  assigned_employee?: string;
+  client_name?: string;
+  address?: string;
+  qrcode?: string;
+  service_type?: string;
+  [key: string]: any;
 }
 
 export interface User {
   id: string;
   full_name: string;
   email: string;
-  role: 'admin' | 'ops_manager' | 'tech' | 'warehouse' | 'user';
+  role: 'admin' | 'ops_manager' | 'tech' | 'warehouse' | 'user' | 'road_tech';
   latitude: number;
   longitude: number;
   created_at: string;
+  name?: string;
+  [key: string]: any;
 }
 
 export interface Machine {

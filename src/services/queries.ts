@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { stockRepository } from '../features/inventory/repository';
 import { toast } from 'sonner';
 
 // Reusable fetchers that can be used by hooks or in mutation functions
 export const fetchAvailableStock = async () => {
-    const { data, error } = await supabase.from('stock').select('*');
-    if (error) throw error;
+    const data = await stockRepository.getAll();
+    if (!data) return [];
     
     return data.map(item => ({
         ...item,

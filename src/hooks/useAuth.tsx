@@ -11,7 +11,7 @@ interface AuthContextType {
   isAdmin: boolean;
   can_update_location: boolean;
   refreshProfile: () => Promise<void>;
-  loginDemo: (roleName: 'admin' | 'user') => void;
+  loginDemo: (roleName: 'admin' | 'ops_manager' | 'warehouse' | 'tech' | 'road_tech' | 'user') => void;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -34,8 +34,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = async (userId: string, emailStr?: string) => {
     // Skip if it's a demo user id
-    if (userId === 'demo-admin-id' || userId === 'demo-user-id') {
-      setRole(userId === 'demo-admin-id' ? 'admin' : 'user');
+    if (userId.startsWith('demo-')) {
+      const storedRole = localStorage.getItem('demo_user_role');
+      setRole(storedRole || 'user');
       setCanUpdateLocation(true);
       return;
     }
@@ -80,11 +81,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const loginDemo = (roleName: 'admin' | 'user') => {
+  const loginDemo = (roleName: 'admin' | 'ops_manager' | 'warehouse' | 'tech' | 'road_tech' | 'user') => {
     localStorage.setItem('demo_user_role', roleName);
     setRole(roleName);
     setCanUpdateLocation(true);
-    const demoId = roleName === 'admin' ? 'demo-admin-id' : 'demo-user-id';
+    const demoId = `demo-${roleName}-id`;
     const mockUser = {
       id: demoId,
       email: `${roleName}@demo.local`,
@@ -114,8 +115,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(currentUser);
 
       if (currentUser) {
-        if (currentUser.id === "demo-admin-id" || currentUser.id === "demo-user-id") {
-          setRole(currentUser.id === "demo-admin-id" ? "admin" : "user");
+        if (currentUser.id.startsWith("demo-")) {
+          const storedRole = localStorage.getItem('demo_user_role');
+          setRole(storedRole || 'user');
           setCanUpdateLocation(true);
         } else {
           await fetchProfile(currentUser.id, currentUser.email);
@@ -123,11 +125,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         // Check for local demo login fallback
         const savedDemo = localStorage.getItem('demo_user_role');
-        if (savedDemo === 'admin' || savedDemo === 'user') {
-          const demoRole = savedDemo as 'admin' | 'user';
+        if (savedDemo) {
+          const demoRole = savedDemo as 'admin' | 'ops_manager' | 'warehouse' | 'tech' | 'road_tech' | 'user';
           setRole(demoRole);
           setCanUpdateLocation(true);
-          const demoId = demoRole === 'admin' ? 'demo-admin-id' : 'demo-user-id';
+          const demoId = `demo-${demoRole}-id`;
           const mockUser = {
             id: demoId,
             email: `${demoRole}@demo.local`,
@@ -207,5 +209,16 @@ export const useAuth = () => {
     return { error: null };
   };
 
-  return { ...context, isAdmin: context.role === 'admin', login, logout };
+  const userRole = context.role;
+
+  return {
+    ...context,
+    isAdmin: userRole === 'admin',
+    isOpsManager: userRole === 'ops_manager',
+    isWarehouse: userRole === 'warehouse',
+    isTech: userRole === 'tech' || userRole === 'road_tech',
+    isUser: userRole === 'user',
+    login,
+    logout
+  };
 };

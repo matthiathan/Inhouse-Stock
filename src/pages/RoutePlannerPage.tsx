@@ -31,8 +31,8 @@ import {
   History,
   Info
 } from 'lucide-react';
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+const icon = 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png';
+const iconShadow = 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png';
 
 // Setup Leaflet marker icon
 let DefaultIcon = L.icon({

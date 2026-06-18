@@ -9,6 +9,9 @@ import { toast } from 'sonner';
 import { getAssetByQR, getSections, updateAssetSection, addMachine, getMachineModels, getNextFADocSequence, getStockByBarcode, deductStockQuantity, deleteStockItem, archiveStockItem } from '../api/assetApi';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { assetRepository } from '../services/api/assetRepository';
+import { sectionRepository } from '../services/api/sectionRepository';
+import { stockRepository } from '../features/inventory/repository';
 import { useStock } from '../features/inventory/hooks';
 import { Button } from '../components/ui/Button';
 import { useQueryClient } from '@tanstack/react-query';
@@ -244,12 +247,10 @@ export function StockPage() {
         toast.success("Stock dispatched successfully!");
         
         // Refresh
-        const { data: refreshed } = await supabase
-          .from(detectedTable === 'stock' ? 'stock' : 'inventory')
-          .select('*')
-          .order('id', { ascending: false });
+        const refreshed = await stockRepository.getAll();
         if (refreshed) {
-          setStockItems(refreshed);
+          const sorted = [...refreshed].sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+          setStockItems(sorted);
         }
         
         setIsDispatchModalOpen(false);
@@ -840,17 +841,8 @@ export function AssetsPage() {
   useEffect(() => {
     const fetchSections = async () => {
       try {
-        const { data, error } = await supabase
-          .from('section')
-          .select('id, section_name')
-          .order('section_name', { ascending: true });
-        
-        if (error) {
-          toast.error(`Failed to load sections: ${error.message}`);
-          setSections([]);
-        } else {
-          setSections(data as Section[] || []);
-        }
+        const data = await sectionRepository.getAll();
+        setSections(data || []);
       } catch (err: any) {
         toast.error(`Error fetching sections: ${err.message || 'Unknown error'}`);
         setSections([]);
@@ -865,15 +857,15 @@ export function AssetsPage() {
     const fetchAssets = async () => {
         setLoading(true);
         try {
-            let query = supabase.from('machines').select('id, serial_number, qr_code, asset_name, section');
-            
-            if (selectedSection) {
-                query = query.eq('section', selectedSection);
+            const allMachines = await assetRepository.getAll();
+            if (allMachines) {
+                const filtered = selectedSection 
+                    ? allMachines.filter(m => m.section === selectedSection)
+                    : allMachines;
+                setAssets(filtered);
+            } else {
+                setAssets([]);
             }
-
-            const { data, error } = await query;
-            if (error) throw error;
-            setAssets(data || []);
         } catch (err: any) {
             toast.error("Error fetching: " + err.message);
         } finally {

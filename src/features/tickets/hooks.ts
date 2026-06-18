@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ticketRepository } from './repository';
 import { MaintenanceTicket } from '../../types';
-import { supabase } from '../../lib/supabase';
 
 export const useUnassignedTickets = () => {
     return useQuery({
@@ -13,11 +12,7 @@ export const useUnassignedTickets = () => {
 export const useOpenTickets = () => {
     return useQuery({
         queryKey: ['tickets', 'allOpen'],
-        queryFn: async () => {
-            const { data, error } = await supabase.from('maintenance_tickets').select('*').neq('status', 'Closed');
-            if (error) throw error;
-            return data as MaintenanceTicket[];
-        },
+        queryFn: () => ticketRepository.getOpenTickets(),
     });
 };
 

@@ -27,6 +27,7 @@ export default function Sidebar() {
   const allNavItems = [
     { name: 'Stock', path: '/stock', icon: Package, roles: ['admin', 'ops_manager', 'warehouse'] },
     { name: 'Orders', path: '/orders', icon: ClipboardList, roles: ['admin', 'ops_manager', 'warehouse'] },
+    { name: 'Fulfillment', path: '/fulfillment', icon: ClipboardList, roles: ['admin', 'ops_manager', 'warehouse'] },
     { name: 'Route Planner', path: '/route-planner', icon: Map, roles: ['admin', 'ops_manager'] },
     { name: 'Dispatch', path: '/dispatch', icon: Map, roles: ['admin', 'ops_manager'] },
     { name: 'My Route', path: '/my-route', icon: MapPin, roles: ['tech', 'road_tech'] },

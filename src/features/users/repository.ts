@@ -1,5 +1,6 @@
 import { BaseRepository } from '../../services/api/baseRepository';
 import { User } from '../../types';
+import { supabase } from '../../lib/supabase';
 
 export class UserRepository extends BaseRepository<User> {
     constructor() {
@@ -7,11 +8,13 @@ export class UserRepository extends BaseRepository<User> {
     }
 
     async getTechnicians(): Promise<User[] | null> {
-        // Since baseRepository is generic, for specific queries, 
-        // normally we would extend, but for now, let's keep it simple and just fetch all.
-        // The role filtering can be handled in fetch, but as a base extension I'll just keep all for now.
-        // Will need to create specialized repository methods soon.
-        return this.getAll();
+        const { data, error } = await supabase
+            .from(this.tableName)
+            .select('*')
+            .in('role', ['tech', 'road_tech']);
+        
+        if (error) throw error;
+        return data as User[];
     }
 }
 

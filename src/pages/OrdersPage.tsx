@@ -3,18 +3,29 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useForm, useFieldArray, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createOrderSchema, CreateOrderSchema } from '../lib/schemas';
-import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { Order, OrderItem } from '../types';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { CheckCircle2, AlertCircle, Plus, Camera, Loader2 } from 'lucide-react';
+import { 
+  useOrdersWithItems, 
+  useCreateOrder, 
+  useUpdateFulfillItem, 
+  useCompleteOrder 
+} from '../features/orders/hooks';
 
 export function OrdersPage() {
   const { role } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // React Query Hooks
+  const { data: dbData, isLoading: loadingOrders } = useOrdersWithItems();
+  const orders = dbData?.orders || [];
+  const orderItems = dbData?.orderItems || [];
+
+  const createOrderMutation = useCreateOrder();
+  const updateFulfillItemMutation = useUpdateFulfillItem();
+  const completeOrderMutation = useCompleteOrder();
 
   // For creation form
   const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm<any>({
@@ -49,10 +60,6 @@ export function OrdersPage() {
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  useEffect(() => {
     if (isScannerOpen && activeOrder) {
       const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
       scannerRef.current = scanner;
@@ -84,44 +91,32 @@ export function OrdersPage() {
     setIsCreateModalOpen(true);
   }
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    const { data: o } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-    const { data: oi } = await supabase.from('order_items').select('*');
-    if (o) setOrders(o);
-    if (oi) setOrderItems(oi);
-    setLoading(false);
-  };
-
   const createOrder = async (data: CreateOrderSchema) => {
     if (!['admin', 'ops_manager'].includes(role || '')) return;
-    
-    // 1. Create order
-    const { data: order, error } = await supabase.from('orders').insert({
-        order_number: data.orderNumber,
-        delivery_date: data.deliveryDate,
-        status: 'Pending'
-    }).select().single();
 
-    if (error) { toast.error("Failed to create order"); return; }
+    // Convert line items to barcodes/required quantities
+    const items = data.lineItems.map(item => {
+      const stockItem = availableStockData.find(s => String(s.id) === String(item.stockId));
+      return {
+        barcode: stockItem?.barcode || '',
+        requiredQty: item.requiredQty
+      };
+    }).filter(i => !!i.barcode);
 
-    // 2. Insert items
-    for (const item of data.lineItems) {
-        const stockItem = availableStockData.find(s => String(s.id) === String(item.stockId));
-        
-        await supabase.from('order_items').insert({
-            order_id: order.id,
-            stock_barcode: stockItem?.barcode,
-            required_quantity: item.requiredQty,
-            scanned_quantity: 0,
-            is_fulfilled: false
-        });
-    }
-
-    toast.success("Order created");
-    setIsCreateModalOpen(false);
-    reset(); // reset form
-    fetchOrders();
+    createOrderMutation.mutate({
+      orderNumber: data.orderNumber,
+      deliveryDate: data.deliveryDate,
+      items
+    }, {
+      onSuccess: () => {
+        toast.success("Order created");
+        setIsCreateModalOpen(false);
+        reset(); // reset form
+      },
+      onError: (err: any) => {
+        toast.error("Failed to create order: " + err.message);
+      }
+    });
   };
 
   const fulfillItem = async (barcode: string) => {
@@ -140,16 +135,23 @@ export function OrdersPage() {
     const newScanned = item.scanned_quantity + 1;
     const isFulfilled = newScanned >= item.required_quantity;
 
-    await supabase.from('order_items').update({
-        scanned_quantity: newScanned,
-        is_fulfilled: isFulfilled
-    }).eq('id', item.id);
-
-    setLastScannedResult({barcode, success: true, message: "Item scanned successfully"});
-    setTotalScannedCount(prev => prev + 1);
-    toast.success("Item scanned");
-    fetchOrders();
-    setIsProcessing(false);
+    updateFulfillItemMutation.mutate({
+        id: item.id,
+        scannedQuantity: newScanned,
+        isFulfilled
+    }, {
+        onSuccess: () => {
+            setLastScannedResult({barcode, success: true, message: "Item scanned successfully"});
+            setTotalScannedCount(prev => prev + 1);
+            toast.success("Item scanned");
+            setIsProcessing(false);
+        },
+        onError: (err: any) => {
+            setLastScannedResult({barcode, success: false, message: "Error scanning: " + err.message});
+            toast.error("Failed to fulfill item: " + err.message);
+            setIsProcessing(false);
+        }
+    });
   };
 
   const completeOrder = async () => {
@@ -157,21 +159,20 @@ export function OrdersPage() {
     
     if (!window.confirm("Are you sure you want to complete this order? (Partial shortages will be logged)")) return;
     
-    const { error } = await supabase.rpc('complete_order_transaction', { order_id_param: activeOrder.id });
-
-    if (error) {
-        toast.error("Failed to complete order: " + error.message);
-        return;
-    }
-
-    toast.success("Order completed atomically!");
-    setIsScannerOpen(false);
-    fetchOrders();
+    completeOrderMutation.mutate(activeOrder.id, {
+        onSuccess: () => {
+            toast.success("Order completed atomically!");
+            setIsScannerOpen(false);
+        },
+        onError: (error: any) => {
+            toast.error("Failed to complete order: " + error.message);
+        }
+    });
   };
 
   const isAllFulfilled = activeOrder && orderItems.filter(i => i.order_id === activeOrder.id).every(i => i.is_fulfilled);
 
-  if (loading) return <div>Loading...</div>;
+  if (loadingOrders) return <div>Loading...</div>;
 
   return (
     <div className="p-8 space-y-8">

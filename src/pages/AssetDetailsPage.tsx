@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../lib/supabase';
+import { sectionRepository } from '../services/api/sectionRepository';
+import { assetRepository } from '../services/api/assetRepository';
+import { ticketRepository } from '../features/tickets/repository';
 import { Machine, Section } from '../types';
 import { updateAssetSection } from '../api/assetApi';
 import { createMaintenanceTicket, closeMaintenanceTicket } from '../api/maintenance';
@@ -61,12 +63,7 @@ export function AssetDetailsPage() {
                 const publicUrl = await uploadAssetPhoto(e.target.files[0], assetId);
                 
                 // Update database record with the new URL
-                const { error } = await supabase
-                    .from('machines')
-                    .update({ photo_url: publicUrl })
-                    .eq('id', assetId);
-
-                if (error) throw error;
+                await assetRepository.update(assetId, { photo_url: publicUrl } as any);
                 
                 // Update local state
                 setAsset(prev => prev ? { ...prev, photo_url: publicUrl } as any : null);
@@ -82,11 +79,7 @@ export function AssetDetailsPage() {
     const fetchTickets = async () => {
         if (!id) return;
         try {
-            const { data: ticketData } = await supabase
-                .from('maintenance_tickets')
-                .select('*')
-                .eq('machine_id', id)
-                .order('created_at', { ascending: false });
+            const ticketData = await ticketRepository.getTicketsByMachineId(id);
             setTickets(ticketData || []);
         } catch (err: any) {
             console.error("Failed to fetch tickets", err);
@@ -98,13 +91,7 @@ export function AssetDetailsPage() {
             if (!id) return;
             setLoading(true);
             try {
-                const { data: machineData, error: machErr } = await supabase
-                    .from('machines')
-                    .select('*')
-                    .eq('id', id)
-                    .maybeSingle();
-                
-                if (machErr) throw machErr;
+                const machineData = await assetRepository.getById(id);
                 setAsset(machineData as Machine);
 
                 await fetchTickets();
@@ -163,9 +150,8 @@ export function AssetDetailsPage() {
 
     const fetchSections = async () => {
         try {
-            const { data, error } = await supabase.from('section').select('id, section_name');
-            if (error) throw error;
-            setSections(data as Section[] || []);
+            const data = await sectionRepository.getAll();
+            setSections(data || []);
             if (asset && asset.section) setSelectedSection(asset.section);
             else if (data && data.length > 0) setSelectedSection(data[0].section_name);
         } catch (err: any) {

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { supabase } from '../lib/supabase';
+import { unifiedCustomerRepository } from '../features/customers/repository';
+import { userRepository } from '../features/users/repository';
+import { assetRepository } from '../services/api/assetRepository';
+import { sclRepository } from '../features/dispatch/repository';
 import { toast } from 'sonner';
 import { sclSchema, SclSchemaValue } from '../features/dispatch/schema';
 import { ComboBox } from './ui/ComboBox';
@@ -49,15 +52,15 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
   // Fetch customer, tech and machine data
   const fetchData = async () => {
     try {
-      const [cRes, tRes, mRes] = await Promise.all([
-        supabase.from('unified_customers').select('*'),
-        supabase.from('users').select('id, name, full_name').in('role', ['tech', 'road_tech']),
-        supabase.from('machines').select('*')
+      const [cData, tData, mData] = await Promise.all([
+        unifiedCustomerRepository.getAll(),
+        userRepository.getTechnicians(),
+        assetRepository.getAll()
       ]);
 
-      if (cRes.data) setCustomers(cRes.data);
-      if (tRes.data) setTechs(tRes.data);
-      if (mRes.data) setMachines(mRes.data);
+      if (cData) setCustomers(cData);
+      if (tData) setTechs(tData);
+      if (mData) setMachines(mData);
     } catch (err: any) {
       toast.error('Failed to load auxiliary dispatch data: ' + err.message);
     }
@@ -157,14 +160,10 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
     };
 
     try {
-      const { data: insertData, error } = await supabase
-        .from('service_call_logs')
-        .insert(payload)
-        .select()
-        .single();
+      const insertData = await sclRepository.create(payload as any);
       
-      if (error) {
-        toast.error('Failed to dispatch service call: ' + error.message);
+      if (!insertData) {
+        toast.error('Failed to dispatch service call: Empty database response');
       } else {
         toast.success('Service call logged and dispatched successfully!');
         

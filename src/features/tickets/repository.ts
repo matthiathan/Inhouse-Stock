@@ -12,6 +12,23 @@ export class TicketRepository extends BaseRepository<MaintenanceTicket> {
     if (error) throw error;
     return data as MaintenanceTicket[];
   }
+
+  async getOpenTickets(): Promise<MaintenanceTicket[] | null> {
+    const { data, error } = await supabase.from(this.tableName).select('*').neq('status', 'Closed');
+    if (error) throw error;
+    return data as MaintenanceTicket[];
+  }
+
+  async getTicketsByMachineId(machineId: string): Promise<MaintenanceTicket[] | null> {
+    const { data, error } = await supabase
+      .from(this.tableName)
+      .select('*')
+      .eq('machine_id', machineId)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data as MaintenanceTicket[];
+  }
 }
 
 export const ticketRepository = new TicketRepository();

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from '../lib/supabase';
+import { assetRepository } from '../services/api/assetRepository';
+import { sclRepository } from '../features/dispatch/repository';
 import { toast } from 'sonner';
 import { Camera, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { validateSclTransition, logStateTransition, SclStatus } from '../utils/sclStateMachine';
@@ -37,15 +39,15 @@ export default function SCLTechClosurePage() {
     }
     
     // 1. Fetch Machine
-    const { data: machine, error } = await supabase.from('machines').select('*').eq('qr_code', decodedText).single();
+    const machine = await assetRepository.getByQrCode(decodedText);
     
-    if (error || !machine) {
+    if (!machine) {
         setValidationError("Machine not found for this QR code.");
         return;
     }
 
     // 2. Fetch SCL to get expected customer/asset info for validation if needed
-    const { data: scl } = await supabase.from('service_call_logs').select('*').eq('id', sclId).single();
+    const scl = sclId ? await sclRepository.getById(sclId) : null;
     if (scl) {
         setSclRecord(scl);
     }
@@ -95,8 +97,8 @@ export default function SCLTechClosurePage() {
     const { data: urlData } = supabase.storage.from('maintenance-photos').getPublicUrl(fileName);
 
     // 2. Update SCL
-    const { error: updateError } = await supabase.from('service_call_logs')
-      .update({
+    try {
+      await sclRepository.update(sclId!, {
         photo_url: urlData.publicUrl,
         closed_remarks: notes,
         serial_number: scannedMachine.serial_number,
@@ -104,13 +106,8 @@ export default function SCLTechClosurePage() {
         current_status: 'Closed',
         status: 'Closed',
         closed_date: new Date().toISOString()
-      })
-      .eq('id', sclId);
+      } as any);
 
-    if (updateError) {
-      toast.error('Failed to close call');
-      setStep(2);
-    } else {
       toast.success('Task closed successfully');
       
       // Resilient transition auditing
@@ -124,6 +121,9 @@ export default function SCLTechClosurePage() {
       );
 
       navigate('/my-route');
+    } catch (err: any) {
+      toast.error('Failed to close call');
+      setStep(2);
     }
   };
 

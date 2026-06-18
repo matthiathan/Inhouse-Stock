@@ -1,5 +1,5 @@
 import { BaseRepository } from '../../services/api/baseRepository';
-import { Customer } from '../../types';
+import { Customer, UnifiedCustomer } from '../../types';
 
 export class CustomerRepository extends BaseRepository<Customer> {
     constructor() {
@@ -7,4 +7,11 @@ export class CustomerRepository extends BaseRepository<Customer> {
     }
 }
 
+export class UnifiedCustomerRepository extends BaseRepository<UnifiedCustomer> {
+    constructor() {
+        super('unified_customers');
+    }
+}
+
 export const customerRepository = new CustomerRepository();
+export const unifiedCustomerRepository = new UnifiedCustomerRepository();

@@ -19,12 +19,13 @@ export interface AuditLogEntry {
 
 /**
  * Validates a transition for an SCL task status.
- * Throws an error if the transition is invalid or lacks mandatory remarks.
+ * Throws an error if the transition is invalid, lacks mandatory remarks, or violates role permissions.
  */
 export const validateSclTransition = (
   currentStatus: SclStatus,
   nextStatus: SclStatus,
-  closedRemarks: string | null
+  closedRemarks: string | null,
+  userRole?: string
 ): { valid: boolean; error?: string } => {
   // If no change, it is valid
   if (currentStatus === nextStatus) {
@@ -37,6 +38,14 @@ export const validateSclTransition = (
     return {
       valid: false,
       error: `Invalid transition path: ${currentStatus} cannot directly transition to ${nextStatus}.`
+    };
+  }
+
+  // Role validation for reopening from Closed
+  if (currentStatus === 'Closed' && userRole && !['admin', 'ops_manager'].includes(userRole)) {
+    return {
+      valid: false,
+      error: 'Only administrators or operations managers are authorized to re-open a closed service call.'
     };
   }
 
