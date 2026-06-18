@@ -1,5 +1,5 @@
-import { getNextOrderNumber, getAvailableStock, deductStockQuantity } from '../api/assetApi';
-import React, { useState, useEffect } from 'react';
+import { getNextOrderNumber, getAvailableStock } from '../api/assetApi';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createOrderSchema, CreateOrderSchema } from '../lib/schemas';
@@ -17,7 +17,8 @@ export function OrdersPage() {
   const [loading, setLoading] = useState(true);
 
   // For creation form
-  const { register, handleSubmit, control, reset, setValue, watch } = useForm<CreateOrderSchema>({
+  const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm<CreateOrderSchema>({
+    resolver: zodResolver(createOrderSchema),
     defaultValues: {
         orderNumber: '',
         deliveryDate: '',
@@ -29,14 +30,10 @@ export function OrdersPage() {
       name: "lineItems"
   });
   const [availableStockData, setAvailableStockData] = useState<any[]>([]);
+  const lineItems = watch('lineItems');
 
-  const handleFormSubmit = async (data: any) => {
-     const result = createOrderSchema.safeParse(data);
-     if (!result.success) {
-         toast.error("Validation failed");
-         return;
-     }
-     await createOrder(result.data);
+  const handleFormSubmit = async (data: CreateOrderSchema) => {
+     await createOrder(data);
   };
 
   // Fulfillment scanner
@@ -47,10 +44,30 @@ export function OrdersPage() {
   const [lastScannedResult, setLastScannedResult] = useState<{barcode: string, success: boolean, message: string} | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isFetchingStock, setIsFetchingStock] = useState(false);
+  
+  // Use a ref to hold scanner instance
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  useEffect(() => {
+    if (isScannerOpen && activeOrder) {
+      const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+      scannerRef.current = scanner;
+      scanner.render(fulfillItem, (err) => {
+          if (err.includes("NotFoundException") || err.includes("No MultiFormat Readers")) return;
+          console.warn(err);
+      });
+      return () => {
+        if (scannerRef.current) {
+          scannerRef.current.clear().catch(console.error);
+          scannerRef.current = null;
+        }
+      };
+    }
+  }, [isScannerOpen, activeOrder]);
 
   const openCreateModal = async () => {
     setIsFetchingStock(true);
@@ -75,39 +92,6 @@ export function OrdersPage() {
     if (oi) setOrderItems(oi);
     setLoading(false);
   };
-
-  const addLineItem = () => {
-    // setLineItems([...lineItems, {stockId: '', barcode: '', itemName: '', requiredQty: 0, maxAvailable: 0}]);
-  };
-
-  const updateLineItem = (index: number, stockId: string) => {
-    // const stockItem = availableStockData.find(i => String(i.id) === String(stockId));
-    // if (stockItem) {
-    //     const newLineItems = [...lineItems];
-    //     newLineItems[index] = {
-    //         stockId: stockItem.id,
-    //         barcode: stockItem.barcode,
-    //         itemName: stockItem.item_name || 'Unknown Item',
-    //         requiredQty: 1, // Default to 1
-    //         maxAvailable: stockItem.total_available_units
-    //     };
-    //     setLineItems(newLineItems);
-    // }
-  };
-
-  const updateLineItemQty = (index: number, qty: number) => {
-    // const newLineItems = [...lineItems];
-    // const max = newLineItems[index].maxAvailable;
-    
-    // if (qty > max) {
-    //     toast.error("Not enough stock");
-    //     qty = max;
-    // }
-    
-    // newLineItems[index].requiredQty = qty;
-    
-    // setLineItems(newLineItems);
-  }
 
   const createOrder = async (data: CreateOrderSchema) => {
     if (!['admin', 'ops_manager'].includes(role || '')) return;
@@ -173,26 +157,14 @@ export function OrdersPage() {
     
     if (!window.confirm("Are you sure you want to complete this order? (Partial shortages will be logged)")) return;
     
-    // Deduct stock for all items based on what was *actually* scanned
-    const itemsToProcess = orderItems.filter(i => i.order_id === activeOrder.id);
-    
-    for (const item of itemsToProcess) {
-        if (item.scanned_quantity < item.required_quantity) {
-            toast.warning(`Shortage detected for ${item.stock_barcode}: Required ${item.required_quantity}, Scanned ${item.scanned_quantity}`);
-        }
-        
-        if (item.scanned_quantity > 0) {
-            await deductStockQuantity(item.stock_barcode, item.scanned_quantity);
-        }
-    }
-    
-    // Update order
-    await supabase.from('orders').update({
-        status: 'Completed',
-        completed_at: new Date().toISOString()
-    }).eq('id', activeOrder.id);
+    const { error } = await supabase.rpc('complete_order_transaction', { order_id_param: activeOrder.id });
 
-    toast.success("Order completed with processed stock deductions!");
+    if (error) {
+        toast.error("Failed to complete order: " + error.message);
+        return;
+    }
+
+    toast.success("Order completed atomically!");
     setIsScannerOpen(false);
     fetchOrders();
   };
@@ -219,27 +191,41 @@ export function OrdersPage() {
 
         {isCreateModalOpen && (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-             <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-lg">
+             <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-lg max-h-[90vh] overflow-y-auto">
                     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
                         <input type="text" {...register('orderNumber')} readOnly className="p-2 border border-brand-border rounded bg-bg-base/50 text-text-secondary" />
                         <input type="date" {...register('deliveryDate')} className="p-2 border border-brand-border rounded bg-bg-base w-full" required />
                         
-                        {fields.map((field, index) => (
-                            <div key={field.id} className="flex gap-2 items-center flex-wrap">
-                                <select {...register(`lineItems.${index}.stockId`)} className="p-2 border border-brand-border rounded bg-bg-base flex-1">
-                                    <option value="">Select Item</option>
-                                    {availableStockData.map(s => <option key={s.id} value={s.id}>{s.barcode} {s.item_name} (Available: {s.total_available_units})</option>)}
-                                </select>
-                                <input 
-                                  type="number" 
-                                  {...register(`lineItems.${index}.requiredQty`, {valueAsNumber: true})}
-                                  min="1"
-                                  placeholder="Qty"
-                                  className="p-2 border border-brand-border rounded bg-bg-base w-24" 
-                                />
-                                <button type="button" onClick={() => remove(index)} className="text-red-500">🗑️</button>
-                            </div>
-                        ))}
+                        {fields.map((field, index) => {
+                            const stockId = lineItems[index]?.stockId;
+                            const stockItem = availableStockData.find(s => String(s.id) === String(stockId));
+                            const maxAvailable = stockItem?.total_available_units || 0;
+                            
+                            return (
+                                <div key={field.id} className="flex flex-col gap-1">
+                                    <div className="flex gap-2 items-center flex-wrap">
+                                        <select {...register(`lineItems.${index}.stockId`)} className="p-2 border border-brand-border rounded bg-bg-base flex-1">
+                                            <option value="">Select Item</option>
+                                            {availableStockData.map(s => <option key={s.id} value={s.id}>{s.barcode} {s.item_name} (Available: {s.total_available_units})</option>)}
+                                        </select>
+                                        <input 
+                                          type="number" 
+                                          {...register(`lineItems.${index}.requiredQty`, {
+                                              valueAsNumber: true,
+                                              max: { value: maxAvailable, message: `Max available: ${maxAvailable}` }
+                                          })}
+                                          min="1"
+                                          placeholder="Qty"
+                                          className="p-2 border border-brand-border rounded bg-bg-base w-24" 
+                                        />
+                                        <button type="button" onClick={() => remove(index)} className="text-red-500">🗑️</button>
+                                    </div>
+                                    {errors.lineItems?.[index]?.requiredQty && (
+                                        <p className="text-red-500 text-xs">{errors.lineItems?.[index]?.requiredQty?.message}</p>
+                                    )}
+                                </div>
+                            );
+                        })}
                         <button type="button" onClick={() => append({stockId: '', requiredQty: 1})} className="text-brand-gold text-sm">+ Add Product</button>
                         <button type="submit" className="bg-brand-gold text-white px-4 py-2 rounded w-full">Create Order</button>
                         <button type="button" onClick={() => setIsCreateModalOpen(false)} className="w-full text-text-secondary">Cancel</button>
@@ -264,7 +250,7 @@ export function OrdersPage() {
 
       {isScannerOpen && activeOrder && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-           <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-lg">
+           <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <h2 className="text-lg font-bold mb-4">Fulfill: {activeOrder.order_number}</h2>
                 
                 {/* Progress Tracking */}
@@ -287,15 +273,6 @@ export function OrdersPage() {
                 })()}
 
                 <div id="qr-reader" className="w-full"></div>
-                 <button onClick={() => {
-                    setLastScannedResult(null); // Clear previous
-                    setTotalScannedCount(0); // Reset counter
-                    const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
-                    scanner.render(fulfillItem, (err) => {
-                        if (err.includes("NotFoundException") || err.includes("No MultiFormat Readers")) return;
-                        console.warn(err);
-                    });
-                }} className="w-full mt-4 bg-brand-gold py-2 rounded text-white font-semibold">Start Scanner</button>
                 
                 {lastScannedResult && (
                     <div className={`mt-2 p-3 rounded text-sm ${lastScannedResult.success ? 'bg-emerald-900/20 text-emerald-500' : 'bg-red-900/20 text-red-500'}`}>

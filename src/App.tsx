@@ -42,7 +42,7 @@ function RoleProtectedRoute({ children, allowedRoles }: RoleProtectedRouteProps)
 
 function IndexRedirect() {
   const { role } = useAuth();
-  const target = (role === 'tech' || role === 'user') ? '/scanner' : '/stock';
+  const target = (role === 'tech') ? '/my-route' : (role === 'user' ? '/scanner' : '/stock');
   return <Navigate to={target} replace />;
 }
 
@@ -109,6 +109,22 @@ export default function App() {
             element={
               <RoleProtectedRoute allowedRoles={['admin', 'ops_manager']}>
                 <RoutePlannerPage />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
+            path="route-planner" 
+            element={
+              <RoleProtectedRoute allowedRoles={['admin', 'ops_manager']}>
+                <RoutePlannerPage />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
+            path="my-route" 
+            element={
+              <RoleProtectedRoute allowedRoles={['tech']}>
+                <TechRoutePage />
               </RoleProtectedRoute>
             } 
           />

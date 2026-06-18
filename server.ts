@@ -1,64 +1,10 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { createClient } from "@supabase/supabase-js";
-
-// Initialize Supabase safely with fallbacks to avoid startup crash
-const supabaseUrl = process.env.SUPABASE_URL || "https://placeholder-project-id.supabase.co";
-const supabaseKey = process.env.SUPABASE_KEY || "placeholder-key-so-server-initialization-does-not-throw-at-runtime";
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
-
-  // Middleware to parse JSON
-  app.use(express.json());
-
-  // API Routes
-  app.get("/api/assets", async (req, res) => {
-    const { data, error } = await supabase.from('machines').select('id, serial_number, qr_code, asset_name, section');
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
-  });
-
-  app.get("/api/assets/:id", async (req, res) => {
-    const { id } = req.params;
-    const { data, error } = await supabase.from('machines').select('*').eq('id', id).single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
-  });
-
-  app.get("/api/assets/qr/:qr", async (req, res) => {
-    const { data, error } = await supabase.from('machines').select('*').eq('qr_code', req.params.qr).single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
-  });
-
-  app.get("/api/sections", async (req, res) => {
-    const { data, error } = await supabase.from('section').select('*');
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
-  });
-
-  app.patch("/api/assets/:id/location", async (req, res) => {
-    const { data, error } = await supabase.from('machines').update({ "section": req.body.newSectionName }).eq('id', req.params.id);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
-  });
-
-  app.get("/api/customers/:code", async (req, res) => {
-    const { code } = req.params;
-    const tables = ['kzn_customers', 'jhb_customers', 'cpt_customers'];
-    for (const table of tables) {
-      const { data, error } = await supabase.from(table).select('*').eq('A/C Code', code).single();
-      if (!error && data) {
-         return res.json(data);
-      }
-    }
-    return res.status(404).json({ error: "Customer not found" });
-  });
 
   // Vite middleware for development or serving static files in production
   if (process.env.NODE_ENV !== "production") {
