@@ -45,6 +45,10 @@ export function AnalyticsPage() {
   const serviceLogs = analyticsData?.serviceLogs || [];
   const customers = analyticsData?.customers || [];
 
+  useEffect(() => {
+    console.log("Analytics Data Samples:", serviceLogs.slice(0, 3));
+  }, [serviceLogs]);
+
   const handleRefresh = async () => {
     try {
       await refetch();
@@ -118,8 +122,16 @@ export function AnalyticsPage() {
   // Process service logs to build a timeline chart for closed service calls
   const getClosedCallsTimelineData = () => {
     const closedLogs = serviceLogs.filter(l => {
-      const statusValue = l.status || l.current_status || '';
-      return statusValue.toLowerCase() === 'closed' && (l.date_closed || l.closed_date);
+      // Use .trim().toLowerCase() to avoid case-sensitivity issues
+      const status = (l.status || l.task_status || l.current_status || '').trim().toLowerCase();
+      
+      // Check if it matches 'closed'
+      const isClosed = status === 'closed';
+      
+      // Ensure the date exists (using the new mapped closed_date from our hook fix)
+      const hasDate = !!(l.closed_date || l.date_closed);
+      
+      return isClosed && hasDate;
     });
 
     const grouped: { [key: string]: { date: string; count: number; JHB: number; KZN: number; CPT: number } } = {};

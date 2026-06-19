@@ -10,31 +10,39 @@ export default function ServiceTasksPage() {
   const [statusFilter, setStatusFilter] = useState<'All' | 'Open' | 'Closed'>('All');
   const [sortBy, setSortBy] = useState<'CustomerName' | 'DateClosedDesc' | 'DateClosedAsc'>('DateClosedDesc');
 
-  // Helper functions for status definitions as specified
   const isTaskOpen = (task: any) => {
     const rawStatus = task["CURRENT STATUS"];
-    return !rawStatus || rawStatus.trim() === '';
+    return rawStatus?.trim().toLowerCase() === 'open';
   };
 
   const isTaskClosed = (task: any) => {
     const rawStatus = task["CURRENT STATUS"];
-    return rawStatus === 'Closed';
+    return rawStatus?.trim().toLowerCase() === 'closed';
   };
 
-  // Helper function to format any date to dd/MM/yyyy in local timezone, returning "-" for null or undefined
+  // Helper function to format any date to dd/MM/yyyy in local timezone, returning raw value if invalid
   const formatDate = (dateValue: any) => {
     if (!dateValue) return '-';
-    try {
-      const dateObj = new Date(dateValue);
-      if (isNaN(dateObj.getTime())) return '-';
-      
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const year = dateObj.getFullYear();
-      return `${day}/${month}/${year}`;
-    } catch (e) {
-      return '-';
+    const strVal = String(dateValue).trim();
+    
+    let dateObj = new Date(strVal);
+    
+    // Handle DD/MM/YYYY
+    if (isNaN(dateObj.getTime()) && strVal.includes('/')) {
+        const parts = strVal.split('/');
+        if (parts.length === 3) {
+            const [day, month, year] = parts.map(Number);
+            dateObj = new Date(year, month - 1, day);
+        }
     }
+    
+    // Fallback to raw string if still invalid
+    if (isNaN(dateObj.getTime())) return strVal;
+    
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const year = dateObj.getFullYear();
+    return `${day}/${month}/${year}`;
   };
 
   // Memoize task counts
