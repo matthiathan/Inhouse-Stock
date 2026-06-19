@@ -10,39 +10,42 @@ export default function ServiceTasksPage() {
   const [statusFilter, setStatusFilter] = useState<'All' | 'Open' | 'Closed'>('All');
   const [sortBy, setSortBy] = useState<'CustomerName' | 'DateClosedDesc' | 'DateClosedAsc'>('DateClosedDesc');
 
+  // Helper functions for status definitions as specified
   const isTaskOpen = (task: any) => {
     const rawStatus = task["CURRENT STATUS"];
-    return rawStatus?.trim().toLowerCase() === 'open';
+    // It is open if the status is null, undefined, empty, OR specifically says 'open'
+    if (!rawStatus || rawStatus.trim() === '') return true;
+    return rawStatus.trim().toLowerCase() === 'open';
   };
 
   const isTaskClosed = (task: any) => {
     const rawStatus = task["CURRENT STATUS"];
-    return rawStatus?.trim().toLowerCase() === 'closed';
+    if (!rawStatus) return false;
+    // Safely trim and convert to lowercase to handle "CLOSED", "Closed", or "closed "
+    return rawStatus.trim().toLowerCase() === 'closed';
   };
 
-  // Helper function to format any date to dd/MM/yyyy in local timezone, returning raw value if invalid
+  // Helper function to safely format dates, defaulting to the raw string if parsing fails
   const formatDate = (dateValue: any) => {
     if (!dateValue) return '-';
-    const strVal = String(dateValue).trim();
     
-    let dateObj = new Date(strVal);
-    
-    // Handle DD/MM/YYYY
-    if (isNaN(dateObj.getTime()) && strVal.includes('/')) {
-        const parts = strVal.split('/');
-        if (parts.length === 3) {
-            const [day, month, year] = parts.map(Number);
-            dateObj = new Date(year, month - 1, day);
-        }
+    // If the database already provides a well-formatted string (like DD/MM/YYYY), 
+    // we can just return it directly instead of breaking the Date object.
+    if (typeof dateValue === 'string' && dateValue.includes('/')) {
+      return dateValue;
     }
-    
-    // Fallback to raw string if still invalid
-    if (isNaN(dateObj.getTime())) return strVal;
-    
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const year = dateObj.getFullYear();
-    return `${day}/${month}/${year}`;
+
+    try {
+      const dateObj = new Date(dateValue);
+      if (isNaN(dateObj.getTime())) return dateValue; // Return raw text instead of '-' if it fails
+      
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = dateObj.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch (e) {
+      return dateValue; // Fallback to raw text
+    }
   };
 
   // Memoize task counts
