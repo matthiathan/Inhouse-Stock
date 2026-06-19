@@ -12,11 +12,12 @@ import {
   useOrdersWithItems, 
   useCreateOrder, 
   useUpdateFulfillItem, 
-  useCompleteOrder 
+  useCompleteOrder,
+  useDeleteOrder
 } from '../features/orders/hooks';
 
 export function OrdersPage() {
-  const { role } = useAuth();
+  const { role, isAdmin, isOpsManager } = useAuth();
   
   // React Query Hooks
   const { data: dbData, isLoading: loadingOrders } = useOrdersWithItems();
@@ -26,6 +27,7 @@ export function OrdersPage() {
   const createOrderMutation = useCreateOrder();
   const updateFulfillItemMutation = useUpdateFulfillItem();
   const completeOrderMutation = useCompleteOrder();
+  const deleteOrderMutation = useDeleteOrder();
 
   // For creation form
   const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm<any>({
@@ -255,17 +257,65 @@ export function OrdersPage() {
         )}
 
       <section className="bg-bg-elevated p-6 rounded-xl border border-brand-border">
-        <h2 className="text-lg font-bold text-text-primary mb-4">Active Orders</h2>
-        <div className="space-y-2">
-            {orders.filter(o => o.status === 'Pending').map(o => (
-                <div key={o.id} className="flex justify-between items-center p-3 border border-brand-border rounded">
-                    <span>{o.order_number} - {o.delivery_date}</span>
-                    {role === 'warehouse' && (
-                        <button onClick={() => { setActiveOrder(o); setIsScannerOpen(true); }} className="bg-brand-gold text-white px-3 py-1 rounded text-xs">Fulfill</button>
-                    )}
-                </div>
-            ))}
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-text-primary">
+            {role === 'warehouse' ? 'My Active Tasks' : 'Order Overview'}
+          </h2>
         </div>
+
+        {/* Active Orders Section (Visible to all) */}
+        <div className="space-y-2 mb-8">
+          <h3 className="text-sm font-semibold text-text-secondary uppercase">Pending Fulfillment</h3>
+          {orders.filter(o => o.status === 'Pending').map(o => (
+            <div key={o.id} className="flex justify-between items-center p-3 border border-brand-border rounded">
+              <span>{o.order_number} - {o.delivery_date}</span>
+              {role === 'warehouse' && (
+                <button onClick={() => { setActiveOrder(o); setIsScannerOpen(true); }} className="bg-brand-gold text-white px-3 py-1 rounded text-xs">Fulfill</button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Completed Orders Section (Visible to Admin/Ops Managers Only) */}
+        {(isAdmin || isOpsManager) && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-text-secondary uppercase">Completed Orders (History)</h3>
+            <div className="overflow-x-auto bg-gray-900/20 rounded-lg">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs uppercase bg-gray-900/30 text-text-secondary">
+                  <tr>
+                    <th className="px-4 py-3">Order Number</th>
+                    <th className="px-4 py-3">Delivery Date</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-border">
+                  {orders.filter(o => o.status === 'Fulfilled').map(o => (
+                    <tr key={o.id} className="hover:bg-gray-800/10">
+                      <td className="px-4 py-3 font-mono">{o.order_number}</td>
+                      <td className="px-4 py-3">{o.delivery_date}</td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-1 bg-emerald-900/40 text-emerald-400 rounded-full text-xs font-semibold">
+                          Fulfilled
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button 
+                          onClick={() => deleteOrderMutation.mutate(o.id)}
+                          className="text-red-500 hover:text-red-400 p-1"
+                          title="Delete Order"
+                        >
+                          🗑️
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </section>
 
       {isScannerOpen && activeOrder && (

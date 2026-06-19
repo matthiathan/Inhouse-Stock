@@ -102,3 +102,14 @@ export const useCompleteOrder = () => {
     }
   });
 };
+
+export const useDeleteOrder = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => orderRepository.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['ordersWithItems'] });
+    }
+  });
+};

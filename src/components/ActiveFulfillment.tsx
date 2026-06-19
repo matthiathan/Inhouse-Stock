@@ -156,9 +156,13 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
 
       toast.success("Order fulfilled!");
       onClose();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      toast.error("Fulfillment failed: " + message);
+    } catch (error: any) {
+      // CORRECT WAY TO LOG: Look for the specific 'message' property
+      const errorMessage = error.message || error.details || JSON.stringify(error);
+      console.error("Fulfillment failed:", errorMessage);
+      
+      // Update your UI to show this specific message
+      toast.error("Fulfillment failed: " + errorMessage); 
     } finally {
       setIsCompleting(false);
     }
