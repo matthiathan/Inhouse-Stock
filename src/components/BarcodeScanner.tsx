@@ -26,6 +26,17 @@ export default function BarcodeScanner({
   const scannerInstanceRef = useRef<Html5Qrcode | null>(null);
   const { torchOn, toggleTorch, isSupported, checkSupport } = useTorch(scannerInstanceRef);
 
+  // Stabilize callbacks using the mutable ref pattern to keep the effect dependency-free
+  const onScanRef = useRef(onScan);
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
+
+  const checkSupportRef = useRef(checkSupport);
+  useEffect(() => {
+    checkSupportRef.current = checkSupport;
+  }, [checkSupport]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -36,6 +47,9 @@ export default function BarcodeScanner({
       if (!isMounted) return;
 
       try {
+        // Prevent starting if container element is unmounted
+        if (!document.getElementById(containerId)) return;
+
         const scanner = new Html5Qrcode(containerId);
         scannerInstanceRef.current = scanner;
 
@@ -52,7 +66,7 @@ export default function BarcodeScanner({
               if (navigator.vibrate) {
                 navigator.vibrate(100);
               }
-              onScan(decodedText);
+              onScanRef.current(decodedText);
             }
           },
           () => {
@@ -63,7 +77,11 @@ export default function BarcodeScanner({
         if (isMounted) {
           setIsInitializing(false);
           // Check if torch is supported after camera starts
-          setTimeout(checkSupport, 1000);
+          setTimeout(() => {
+            if (isMounted) {
+              checkSupportRef.current();
+            }
+          }, 1000);
         }
       } catch (err: any) {
         if (isMounted) {
@@ -77,17 +95,29 @@ export default function BarcodeScanner({
 
     return () => {
       isMounted = false;
-      if (scannerInstanceRef.current) {
-        if (scannerInstanceRef.current.isScanning) {
-          scannerInstanceRef.current.stop()
+      const currentScanner = scannerInstanceRef.current;
+      if (currentScanner) {
+        scannerInstanceRef.current = null; // Instantly nullify key ref
+        if (currentScanner.isScanning) {
+          currentScanner.stop()
             .then(() => {
-              scannerInstanceRef.current?.clear();
+              try {
+                currentScanner.clear();
+              } catch (e) {
+                console.warn("Clear error on unmount:", e);
+              }
             })
             .catch(err => console.error("Scanner cleanup error:", err));
+        } else {
+          try {
+            currentScanner.clear();
+          } catch (e) {
+            // ignore
+          }
         }
       }
     };
-  }, [onScan, checkSupport]);
+  }, []);
 
   return (
     <motion.div 

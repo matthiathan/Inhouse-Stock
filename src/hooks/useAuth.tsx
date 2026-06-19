@@ -32,6 +32,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = async (userId: string, emailStr?: string) => {
     try {
+      // First, get any role defined in user metadata or app metadata as a fallback/source
+      const currentUser = (await supabase.auth.getUser()).data.user;
+      const metadataRole = currentUser?.app_metadata?.role || currentUser?.user_metadata?.role;
+
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -40,11 +44,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) {
         console.error('Error fetching user profile:', error.message);
-        // If the profile does not exist (e.g. 40 row not found), let's attempt to insert the record.
+        // If the profile does not exist (e.g. 40 row not found), let's attempt to insert the record with role from metadata
         const defaultProfile = {
           id: userId,
           email: emailStr || '',
-          role: 'user',
+          role: metadataRole || 'user',
           can_update_location: true
         };
         const { data: inserted, error: insertError } = await supabase
@@ -54,14 +58,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .single();
 
         if (!insertError && inserted) {
-          setRole(inserted.role || 'user');
+          setRole(inserted.role || metadataRole || 'user');
           setCanUpdateLocation(inserted.can_update_location !== false);
         } else {
-          setRole('user');
+          setRole(metadataRole || 'user');
           setCanUpdateLocation(true);
         }
       } else if (data) {
-        setRole(data.role || 'user');
+        setRole(data.role || metadataRole || 'user');
         setCanUpdateLocation(data.can_update_location !== false);
       }
     } catch (err) {
@@ -148,6 +152,7 @@ export const useAuth = () => {
     isAdmin: userRole === 'admin',
     isOpsManager: userRole === 'ops_manager',
     isWarehouse: userRole === 'warehouse',
+    isFinance: userRole === 'finance',
     isTech: userRole === 'tech' || userRole === 'road_tech',
     isUser: userRole === 'user',
     login,

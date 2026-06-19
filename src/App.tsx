@@ -227,7 +227,7 @@ export default function App() {
             <Route 
               path="tasks" 
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'ops_manager', 'finance']}>
+                <RoleProtectedRoute allowedRoles={['admin', 'finance']}>
                   <ServiceTasksPage />
                 </RoleProtectedRoute>
               } 

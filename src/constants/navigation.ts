@@ -21,7 +21,7 @@ export const ALL_NAV_ITEMS = [
   { name: 'My Route', path: '/my-route', icon: MapPin, roles: ['tech', 'road_tech'] },
   { name: 'Assets', path: '/assets', icon: Database, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'road_tech', 'user'] },
   { name: 'Scanner', path: '/scanner', icon: QrCode, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'road_tech', 'user'] },
-  { name: 'Service Tasks', path: '/tasks', icon: ClipboardList, roles: ['admin', 'ops_manager'] },
+  { name: 'Service Tasks Monitor', path: '/tasks', icon: ClipboardList, roles: ['admin', 'finance'] },
   { name: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['admin', 'ops_manager'] },
   { name: 'Settings', path: '/settings', icon: Settings, roles: ['admin', 'ops_manager'] },
 ];

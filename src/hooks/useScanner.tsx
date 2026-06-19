@@ -19,6 +19,17 @@ export const useScanner = (
 ) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
+  // Stabilize callbacks using ref pattern to avoid triggering effect runs when props change
+  const onScanSuccessRef = useRef(onScanSuccess);
+  useEffect(() => {
+    onScanSuccessRef.current = onScanSuccess;
+  }, [onScanSuccess]);
+
+  const configRef = useRef(config);
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
   useEffect(() => {
     if (!enabled) return;
     
@@ -39,10 +50,10 @@ export const useScanner = (
           
           try {
             await scannerRef.current.start(
-              { facingMode: config.videoConstraints?.facingMode || "environment" },
-              config,
+              { facingMode: configRef.current.videoConstraints?.facingMode || "environment" },
+              configRef.current,
               (decodedText) => {
-                if (isMounted) onScanSuccess(decodedText);
+                if (isMounted) onScanSuccessRef.current(decodedText);
               },
               (errorMessage) => {
                 // Ignore NotFound errors while searching
@@ -67,21 +78,30 @@ export const useScanner = (
     // CRITICAL CLEANUP BLOCK
     return () => {
       isMounted = false;
-      if (scannerRef.current) {
-        if (scannerRef.current.isScanning) {
-          scannerRef.current.stop()
+      const currentScanner = scannerRef.current;
+      if (currentScanner) {
+        // Clear reference to force recreation if enabled gets toggled again
+        scannerRef.current = null;
+        if (currentScanner.isScanning) {
+          currentScanner.stop()
             .then(() => {
               try {
-                scannerRef.current?.clear();
+                currentScanner.clear();
               } catch (e) {
-                console.warn("Clear error:", e);
+                console.warn("Clear error on unmount:", e);
               }
             })
             .catch((err) => {
               console.error("Failed to release camera hardware:", err);
             });
+        } else {
+          try {
+            currentScanner.clear();
+          } catch (e) {
+            // ignore
+          }
         }
       }
     };
-  }, [elementId, onScanSuccess, enabled]); // Include enabled to re-trigger when interface opens
+  }, [elementId, enabled]); // Include enabled to re-trigger when interface opens
 };

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.tsx';
 import './index.css';
 import { AuthProvider } from './hooks/useAuth.tsx';
+import { initSupabase } from './lib/supabase.ts';
 
 const queryClient = new QueryClient();
 
@@ -47,13 +48,23 @@ window.addEventListener('error', (event) => {
   }
 });
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </QueryClientProvider>
-  </StrictMode>,
-);
+async function bootstrap() {
+  try {
+    await initSupabase();
+  } catch (err) {
+    console.error("Failed to bootstrap Supabase configuration:", err);
+  }
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+}
+
+bootstrap();
 

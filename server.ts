@@ -1,10 +1,22 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config();
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Serve Supabase configuration safely to client
+  app.get("/api/config", (req, res) => {
+    res.json({
+      supabaseUrl: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "",
+      supabaseAnonKey: process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_KEY || ""
+    });
+  });
 
   // Vite middleware for development or serving static files in production
   if (process.env.NODE_ENV !== "production") {
