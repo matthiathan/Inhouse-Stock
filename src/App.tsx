@@ -8,7 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import DashboardLayout from './components/layout/DashboardLayout';
 import { SCLDispatchForm } from './components/SCLDispatchForm';
-import { StockPage, AssetsPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage, OrderFulfillmentPage, RoutePlannerPage, TechRoutePage, SCLTechClosurePage, ServiceBillingReport } from './pages';
+import { StockPage, AssetsPage, NewAssetPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage, OrderFulfillmentPage, RoutePlannerPage, TechRoutePage, SCLTechClosurePage, ServiceBillingReport } from './pages';
 import { useAuth } from './hooks/useAuth';
 
 interface RoleProtectedRouteProps {
@@ -164,6 +164,7 @@ export default function App() {
               } 
             />
             <Route path="assets" element={<AssetsPage />} />
+            <Route path="assets/new" element={<NewAssetPage />} />
             <Route path="assets/:id" element={<AssetDetailsPage />} />
             <Route path="customers/:code" element={<CustomerDetailsPage />} />
             <Route path="scanner" element={<ScannerPage />} />

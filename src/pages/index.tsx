@@ -20,7 +20,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTorch } from '../hooks/useTorch';
 import { Lightbulb, AlertTriangle, RefreshCcw, CheckCircle } from 'lucide-react';
 import { NewStockMenu } from '../components/NewStockMenu';
+import VirtualStockList from '../components/VirtualStockList';
 
+export { NewAssetPage } from './NewAssetPage';
 export { AnalyticsPage } from './AnalyticsPage';
 export { AssetDetailsPage } from './AssetDetailsPage';
 export { OrdersPage } from './OrdersPage';
@@ -331,119 +333,10 @@ export function StockPage() {
           <div className="w-8 h-8 border-4 border-brand-gold border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           Loading stock items...
         </div>
-      ) : filteredItems.length === 0 ? (
-        <div className="bg-bg-elevated py-16 px-6 rounded-xl border border-brand-border text-center">
-          <p className="text-text-secondary max-w-md mx-auto mb-4">No stock items match your criteria. Add new stock using the button above.</p>
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="text-brand-gold text-sm font-medium hover:underline cursor-pointer min-h-[44px] px-4">
-              Clear search filter
-            </button>
-          )}
-        </div>
       ) : (
-        <>
-          {/* Mobile view cards */}
-          <div className="block md:hidden space-y-4">
-            {filteredItems.map((item, index) => {
-              const qty = getQuantity(item);
-              const isLow = qty < 100;
-              return (
-                <div 
-                  key={item.id || index} 
-                  className="bg-bg-elevated p-4 rounded-xl border border-brand-border flex flex-col gap-3 shadow-sm"
-                >
-                  <div className="flex justify-between items-start gap-3">
-                    <div className="space-y-1">
-                      <span className="font-mono text-[10px] tracking-wider text-text-secondary bg-bg-base px-2 py-0.5 rounded border border-brand-border inline-block">
-                        {getSKU(item)}
-                      </span>
-                      <h3 className="font-bold text-text-primary text-base">
-                        {getItemName(item)}
-                      </h3>
-                    </div>
-                    <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold shrink-0 ${
-                      isLow ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'
-                    }`}>
-                      {qty} units
-                    </span>
-                    {(role === 'admin' || role === 'ops_manager') && (
-                      null
-                    )}
-                  </div>
-
-                  <div className="border-t border-brand-border/60 pt-2.5 flex flex-col gap-1">
-                    <span className="text-xs text-text-secondary">
-                      {getNotes(item)}
-                    </span>
-                    {isLow && (
-                      <span className="text-[10px] text-amber-500 font-medium inline-flex items-center gap-1 mt-1">
-                        ⚠️ Low Stock Warning
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Desktop view table */}
-          <div className="hidden md:block bg-bg-elevated rounded-xl border border-brand-border overflow-hidden">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-brand-border text-text-secondary text-sm bg-bg-base/30">
-                  <th className="p-4 font-semibold">Barcode</th>
-                  <th className="p-4 font-semibold">Item Name</th>
-                  <th className="p-4 font-semibold">Pallets</th>
-                  <th className="p-4 font-semibold">Boxes</th>
-                  <th className="p-4 font-semibold">Units/Box</th>
-                  <th className="p-4 font-semibold text-right">Total Units</th>
-                  <th className="p-4 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredItems.map((item, index) => {
-                  const barcodeValue = item.barcode || getSKU(item) || 'N/A';
-                  const itemNameValue = getItemName(item);
-                  const palletQtyValue = item.pallet_quantity !== undefined && item.pallet_quantity !== null ? item.pallet_quantity : 0;
-                  const boxQtyValue = item.box_quantity !== undefined && item.box_quantity !== null ? item.box_quantity : 0;
-                  const unitsPerBoxValue = item.units_per_box !== undefined && item.units_per_box !== null ? item.units_per_box : 0;
-                  const totalUnits = getCalculatedTotalUnits(item);
-                  const isLow = totalUnits < 100;
-                  return (
-                    <tr key={item.id || index} className="border-b border-brand-border hover:bg-bg-base/40 transition-colors">
-                      <td className="p-4 font-mono text-xs text-text-secondary">{barcodeValue}</td>
-                      <td className="p-4">
-                        <div className="font-semibold text-text-primary text-sm">{itemNameValue}</div>
-                        {getNotes(item) && getNotes(item) !== 'No notes' && (
-                          <div className="text-xs text-text-secondary mt-0.5 line-clamp-1">{getNotes(item)}</div>
-                        )}
-                      </td>
-                      <td className="p-4 text-text-secondary text-sm">{palletQtyValue}</td>
-                      <td className="p-4 text-text-secondary text-sm">{boxQtyValue}</td>
-                      <td className="p-4 text-text-secondary text-sm">{unitsPerBoxValue}</td>
-                      <td className="p-4 text-right">
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold ${
-                            isLow ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'
-                          }`}>
-                            {totalUnits} units
-                          </span>
-                          {isLow && (
-                            <span className="text-[10px] text-amber-500 font-medium">
-                              ⚠️ Low Stock
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4 text-right flex items-center justify-end gap-2">
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div className="space-y-6">
+          <VirtualStockList stockItems={filteredItems} containerHeight="700px" />
+        </div>
       )}
 
       {/* Dispatch Stock Modal */}
@@ -746,7 +639,7 @@ export function AssetsPage() {
           </div>
 
           <button
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => navigate('/assets/new')}
             className="bg-brand-gold hover:bg-brand-gold/90 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors cursor-pointer min-h-[44px] flex items-center justify-center gap-2 text-sm shadow-sm"
           >
             ➕ Add Machine
