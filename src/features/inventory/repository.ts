@@ -3,6 +3,13 @@ import { StockItem } from '../../types';
 import { uploadStockPhoto } from '../../lib/storage';
 import { supabase } from '../../lib/supabase';
 
+export class InsufficientStockError extends Error {
+  constructor(message: string = 'Insufficient stock available to perform this action') {
+    super(message);
+    this.name = 'InsufficientStockError';
+  }
+}
+
 export class StockRepository extends BaseRepository<StockItem> {
   constructor() {
     super('stock');
@@ -30,12 +37,29 @@ export class StockRepository extends BaseRepository<StockItem> {
   }
 
   async decrement(itemId: number, amount: number) {
-    const { error } = await supabase.rpc('decrement_stock', {
-      target_item_id: itemId,
-      decrement_amount: amount
-    });
+    try {
+      const { error } = await supabase.rpc('decrement_stock', {
+        target_item_id: itemId,
+        decrement_amount: amount
+      });
 
-    if (error) throw error;
+      if (error) {
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('insufficient') || msg.includes('stock') || msg.includes('constraint') || msg.includes('below') || msg.includes('negative')) {
+          throw new InsufficientStockError(error.message);
+        }
+        throw error;
+      }
+    } catch (err: any) {
+      if (err instanceof InsufficientStockError) {
+        throw err;
+      }
+      const msg = (err?.message || '').toLowerCase();
+      if (msg.includes('insufficient') || msg.includes('stock') || msg.includes('constraint') || msg.includes('below') || msg.includes('negative')) {
+        throw new InsufficientStockError(err?.message || 'Insufficient stock available to perform this action');
+      }
+      throw err;
+    }
   }
 }
 

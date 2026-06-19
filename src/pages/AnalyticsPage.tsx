@@ -171,13 +171,13 @@ export function AnalyticsPage() {
     });
 
     const sorted = Object.values(grouped).sort((a, b) => {
-      try {
-        const da = new Date(a.date + " 2026");
-        const db = new Date(b.date + " 2026");
-        return da.getTime() - db.getTime();
-      } catch {
-        return a.date.localeCompare(b.date);
-      }
+      // Convert 'Oct 12' or similar format to a parseable date for 2026
+      const parseDate = (dateStr: string) => {
+        // If your date is already formatted (e.g., '12 Oct'), add the year
+        const d = new Date(`${dateStr} 2026`);
+        return d.getTime();
+      };
+      return parseDate(a.date) - parseDate(b.date);
     });
 
     if (sorted.length === 0) {

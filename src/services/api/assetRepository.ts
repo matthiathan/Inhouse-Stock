@@ -8,6 +8,16 @@ export class AssetRepository extends BaseRepository<Machine> {
     super('machines');
   }
 
+  override async getAll(section?: string): Promise<Machine[] | null> {
+    let query = supabase.from(this.tableName).select('*');
+    if (section) {
+      query = query.eq('section', section);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    return data as Machine[];
+  }
+
   override async create(item: Omit<Machine, 'id' | 'created_at'>): Promise<Machine | null> {
     const validation = machineSchema.partial().safeParse(item);
     if (!validation.success) {

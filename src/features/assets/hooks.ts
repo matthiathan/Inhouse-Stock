@@ -7,12 +7,8 @@ export const useAssets = (sectionName?: string) => {
   return useQuery({
     queryKey: ['assets', sectionName || 'all'],
     queryFn: async () => {
-      const all = await assetRepository.getAll();
-      if (!all) return [];
-      if (sectionName) {
-        return all.filter(m => m.section === sectionName);
-      }
-      return all;
+      const filtered = await assetRepository.getAll(sectionName);
+      return filtered || [];
     }
   });
 };

@@ -17,10 +17,16 @@ export default function BarcodeScanner({
   title = "Scan Barcode", 
   description = "Center the code in the box" 
 }: BarcodeScannerProps) {
+  const [enabled, setEnabled] = useState(true);
+  const [scannerKey, setScannerKey] = useState(0);
   const [isInitializing, setIsInitializing] = useState(true);
   const [hasError, setHasError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerId = "barcode-scanner-container";
+  
+  // Track failures and active scanning time
+  const [errorCount, setErrorCount] = useState(0);
+  const [showRestartButton, setShowRestartButton] = useState(false);
   
   // Directly manage scanner lifecycle with a ref for useTorch compatibility
   const scannerInstanceRef = useRef<Html5Qrcode | null>(null);
@@ -38,8 +44,24 @@ export default function BarcodeScanner({
     checkSupportRef.current = checkSupport;
   }, [checkSupport]);
 
+  // Handle manual reset of scanner
+  const resetScanner = () => {
+    setEnabled(false);
+    setErrorCount(0);
+    setShowRestartButton(false);
+    setHasError(null);
+    setIsInitializing(true);
+    setScannerKey(prev => prev + 1);
+    
+    setTimeout(() => {
+      setEnabled(true);
+    }, 150);
+  };
+
   useEffect(() => {
+    if (!enabled) return;
     let isMounted = true;
+    let scanTimeoutId: NodeJS.Timeout | null = null;
 
     const startScanner = async () => {
       // 1. Fake loading delay to hide hardware flash
@@ -79,12 +101,23 @@ export default function BarcodeScanner({
               errorMessage.includes('No MultiFormat Reader') || 
               errorMessage.includes('No barcode format');
 
-            if (!isSilentError && typeof navigator !== 'undefined' && navigator.vibrate) {
-              const now = Date.now();
-              // Throttle to once every 1.5s to prevent freezing or motor burnout on rapid frames
-              if (now - lastVibrateRef.current > 1500) {
-                navigator.vibrate([100, 50, 100]); // Dual pulsation haptic feedback signal for a failed scan attempt
-                lastVibrateRef.current = now;
+            if (!isSilentError) {
+              setErrorCount(prev => {
+                const nextVal = prev + 1;
+                // Expose 'Restart Camera' button if scan errors exceed threshold (e.g. 5 errors)
+                if (nextVal > 5) {
+                  setShowRestartButton(true);
+                }
+                return nextVal;
+              });
+
+              if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                const now = Date.now();
+                // Throttle to once every 1.5s to prevent freezing or motor burnout on rapid frames
+                if (now - lastVibrateRef.current > 1500) {
+                  navigator.vibrate([100, 50, 100]); // Dual pulsation haptic feedback signal for a failed scan attempt
+                  lastVibrateRef.current = now;
+                }
               }
             }
           }
@@ -92,6 +125,14 @@ export default function BarcodeScanner({
 
         if (isMounted) {
           setIsInitializing(false);
+          
+          // Trigger a 5-second timeout to show the Restart button if no successful scan is made
+          scanTimeoutId = setTimeout(() => {
+            if (isMounted) {
+              setShowRestartButton(true);
+            }
+          }, 5000);
+
           // Check if torch is supported after camera starts
           setTimeout(() => {
             if (isMounted) {
@@ -104,6 +145,7 @@ export default function BarcodeScanner({
           const message = err instanceof Error ? err.message : String(err);
           setHasError(message || "Failed to start camera");
           setIsInitializing(false);
+          setShowRestartButton(true);
         }
       }
     };
@@ -112,6 +154,9 @@ export default function BarcodeScanner({
 
     return () => {
       isMounted = false;
+      if (scanTimeoutId) {
+        clearTimeout(scanTimeoutId);
+      }
 
       // Unmount cleanup: immediately turn off physical flash/torch if active to prevent hardware lock
       cleanupTorch();
@@ -138,7 +183,7 @@ export default function BarcodeScanner({
         }
       }
     };
-  }, [cleanupTorch]);
+  }, [cleanupTorch, enabled]);
 
   return (
     <motion.div 
@@ -151,7 +196,7 @@ export default function BarcodeScanner({
       <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-[110]">
         <button 
           onClick={onClose}
-          className="bg-white/10 hover:bg-white/20 p-3 rounded-full text-white backdrop-blur-xl border border-white/10 transition-colors"
+          className="bg-white/10 hover:bg-white/20 p-3 rounded-full text-white backdrop-blur-xl border border-white/10 transition-colors cursor-pointer"
         >
           ✕
         </button>
@@ -159,7 +204,7 @@ export default function BarcodeScanner({
         {isSupported && !isInitializing && (
           <button 
             onClick={toggleTorch}
-            className={`p-3 rounded-full backdrop-blur-xl border border-white/10 transition-all ${
+            className={`p-3 rounded-full backdrop-blur-xl border border-white/10 transition-all cursor-pointer ${
               torchOn ? 'bg-brand-gold text-white shadow-[0_0_15px_rgba(255,184,0,0.4)]' : 'bg-white/10 text-white'
             }`}
           >
@@ -170,7 +215,7 @@ export default function BarcodeScanner({
 
       {/* Main Scanner Stage */}
       <div className="w-full max-w-sm aspect-square bg-gray-900 rounded-3xl overflow-hidden shadow-2xl relative border-4 border-brand-gold/20">
-        <div id={containerId} className="w-full h-full" />
+        <div id={containerId} key={scannerKey} className="w-full h-full" />
         
         {/* Loading / Error Overlays */}
         <AnimatePresence>
@@ -178,7 +223,7 @@ export default function BarcodeScanner({
             <motion.div 
               initial={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-gray-900 flex flex-col items-center justify-center p-6"
+              className="absolute inset-0 bg-gray-900 flex flex-col items-center justify-center p-6 bg-black"
             >
               <RefreshCcw className="w-12 h-12 text-brand-gold animate-spin mb-4" />
               <p className="text-white font-bold">Waking up camera...</p>
@@ -189,16 +234,16 @@ export default function BarcodeScanner({
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="absolute inset-0 bg-red-950/90 flex flex-col items-center justify-center p-6 text-white"
+              className="absolute inset-0 bg-red-955 flex flex-col items-center justify-center p-6 text-white bg-black/90"
             >
-              <Camera className="w-12 h-12 text-red-500 mb-4" />
+              <Camera className="w-12 h-12 text-red-500 mb-4 animate-bounce" />
               <p className="font-bold text-lg">Hardware Error</p>
               <p className="text-sm text-white/70 mt-2">{hasError}</p>
               <button 
-                onClick={() => window.location.reload()}
-                className="mt-6 bg-red-600 px-6 py-2 rounded-xl font-bold text-sm"
+                onClick={resetScanner}
+                className="mt-6 bg-red-600 px-6 py-2 rounded-xl font-bold text-sm tracking-wider hover:bg-red-500 transition-colors cursor-pointer"
               >
-                Reset Camera
+                Restart Camera
               </button>
             </motion.div>
           )}
@@ -230,10 +275,27 @@ export default function BarcodeScanner({
         <p className="text-white/50 text-sm font-medium">{description}</p>
       </div>
 
+      {showRestartButton && !isInitializing && !hasError && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4"
+        >
+          <button
+            onClick={resetScanner}
+            className="flex items-center gap-2 px-5 py-2.5 bg-brand-gold hover:bg-brand-gold/90 text-white text-xs font-bold rounded-full shadow-lg border border-brand-gold/20 transition-all cursor-pointer min-h-[44px]"
+            id="btn-restart-camera"
+          >
+            <RefreshCcw size={14} className="animate-spin" />
+            Restart Camera
+          </button>
+        </motion.div>
+      )}
+
       <div className="mt-8 flex gap-2">
         <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[10px] text-white/50 font-bold uppercase tracking-widest">System Live</span>
+          <span className="text-[10px] text-white/50 font-bold uppercase tracking-widest font-mono">System Live</span>
         </div>
       </div>
     </motion.div>
