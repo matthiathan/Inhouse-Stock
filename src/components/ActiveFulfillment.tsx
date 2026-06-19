@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { CheckCircle, Package, ArrowLeft, RefreshCw, Barcode as BarcodeIcon, Play, QrCode } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -24,6 +24,8 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
   const [loading, setLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const processingRef = useRef(false);
 
   // 1. Fetch Order Items
   useEffect(() => {
@@ -66,32 +68,57 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
   }, [orderId]);
 
   // 2. Progressive Picking Logic
-  const handleScanSuccess = useCallback((decodedText: string) => {
-    setItems(prevItems => {
-      const itemIndex = prevItems.findIndex(i => i.stock_barcode.trim().toLowerCase() === decodedText.trim().toLowerCase());
+  const handleScan = async (decodedText: string) => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    setIsProcessing(true);
+
+    if (navigator.vibrate) navigator.vibrate(200);
+
+    try {
+      const itemToUpdate = items.find(i => i.stock_barcode.trim().toLowerCase() === decodedText.trim().toLowerCase());
       
-      if (itemIndex === -1) {
+      if (!itemToUpdate) {
         toast.error(`Item ${decodedText} not found in this order`);
-        return prevItems;
+        return;
+      }
+      
+      if (itemToUpdate.scanned_quantity >= itemToUpdate.required_quantity) {
+        toast.info(`${itemToUpdate.item_name} is already fully picked`);
+        return;
       }
 
-      const item = prevItems[itemIndex];
+      // Update DB
+      const { error } = await supabase
+        .from('order_items')
+        .update({ scanned_quantity: itemToUpdate.scanned_quantity + 1 })
+        .eq('id', itemToUpdate.id);
       
-      if (item.scanned_quantity >= item.required_quantity) {
-        toast.info(`${item.item_name} is already fully picked`);
-        return prevItems;
-      }
+      if (error) throw error;
 
-      const newItems = [...prevItems];
-      newItems[itemIndex] = {
-        ...item,
-        scanned_quantity: item.scanned_quantity + 1
-      };
+      // Update Local
+      setItems(prevItems => {
+        const newItems = [...prevItems];
+        const index = newItems.findIndex(i => i.id === itemToUpdate.id);
+        newItems[index] = {
+          ...newItems[index],
+          scanned_quantity: newItems[index].scanned_quantity + 1
+        };
+        return newItems;
+      });
       
-      toast.success(`Picked: ${item.item_name}`);
-      return newItems;
-    });
-  }, []);
+      toast.success(`Picked: ${itemToUpdate.item_name}`);
+
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update scan.");
+    } finally {
+      setTimeout(() => {
+        processingRef.current = false;
+        setIsProcessing(false);
+      }, 1500);
+    }
+  };
 
   // 3. Stats & Progress
   const totalRequired = useMemo(() => items.reduce((acc, i) => acc + i.required_quantity, 0), [items]);
@@ -232,7 +259,7 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
       <AnimatePresence>
         {isScanning && (
           <BarcodeScanner 
-            onScan={handleScanSuccess}
+            onScan={handleScan}
             onClose={() => setIsScanning(false)}
             title="Pick Items"
             description="Scan item barcodes to pick them from stock"
@@ -244,10 +271,13 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
       <footer className="fixed bottom-0 left-0 right-0 p-4 bg-bg-elevated border-t border-brand-border flex gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
         <button 
           onClick={() => setIsScanning(true)}
-          className="flex-1 bg-brand-gold text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"
+          disabled={isProcessing}
+          className={`flex-1 font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all ${
+            isProcessing ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-gold text-white'
+          }`}
         >
-          <QrCode className="w-5 h-5" />
-          Scan Item
+          {isProcessing ? <RefreshCw className="w-5 h-5 animate-spin"/> : <QrCode className="w-5 h-5" />}
+          {isProcessing ? 'Saving...' : 'Scan Item'}
         </button>
 
         <button 
