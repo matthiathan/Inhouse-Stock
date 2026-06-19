@@ -29,23 +29,35 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
   useEffect(() => {
     async function fetchOrder() {
       try {
+        // Use a join to get item details directly from the 'stock' table
         const { data, error } = await supabase
           .from('order_items')
-          .select('*')
+          .select(`
+            id,
+            order_id,
+            required_quantity,
+            scanned_quantity,
+            stock:stock_barcode (item_name, barcode)
+          `)
           .eq('order_id', orderId);
 
         if (error) throw error;
         
-        // Initialize scanned_quantity if not present or just set to 0 for the session
-        const initialized = (data || []).map(item => ({
-          ...item,
+        // Map the joined data to your internal state
+        const initialized = (data || []).map((item: any) => ({
+          id: item.id,
+          order_id: item.order_id,
+          // Fallback to stock record if item_name/barcode are null in order_items
+          item_name: item.stock?.item_name || 'Unknown Item',
+          stock_barcode: item.stock?.barcode || item.stock_barcode,
+          required_quantity: item.required_quantity,
           scanned_quantity: item.scanned_quantity || 0
         }));
         
         setItems(initialized);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        toast.error("Failed to load order items: " + message);
+        console.error(err);
+        toast.error("Failed to load order items.");
       } finally {
         setLoading(false);
       }
