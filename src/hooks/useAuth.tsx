@@ -11,7 +11,6 @@ interface AuthContextType {
   isAdmin: boolean;
   can_update_location: boolean;
   refreshProfile: () => Promise<void>;
-  loginDemo: (roleName: 'admin' | 'ops_manager' | 'warehouse' | 'tech' | 'road_tech' | 'user') => void;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -22,7 +21,6 @@ export const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   can_update_location: true,
   refreshProfile: async () => {},
-  loginDemo: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -33,14 +31,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [canUpdateLocation, setCanUpdateLocation] = useState<boolean>(true);
 
   const fetchProfile = async (userId: string, emailStr?: string) => {
-    // Skip if it's a demo user id
-    if (userId.startsWith('demo-')) {
-      const storedRole = localStorage.getItem('demo_user_role');
-      setRole(storedRole || 'user');
-      setCanUpdateLocation(true);
-      return;
-    }
-
     try {
       const { data, error } = await supabase
         .from('users')
@@ -81,30 +71,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const loginDemo = (roleName: 'admin' | 'ops_manager' | 'warehouse' | 'tech' | 'road_tech' | 'user') => {
-    localStorage.setItem('demo_user_role', roleName);
-    setRole(roleName);
-    setCanUpdateLocation(true);
-    const demoId = `demo-${roleName}-id`;
-    const mockUser = {
-      id: demoId,
-      email: `${roleName}@demo.local`,
-      aud: 'authenticated',
-      role: 'authenticated',
-      app_metadata: {},
-      user_metadata: {},
-      created_at: new Date().toISOString()
-    } as any;
-    setUser(mockUser);
-    setSession({
-      access_token: 'demo-token',
-      token_type: 'bearer',
-      expires_in: 3600,
-      refresh_token: 'demo-refresh',
-      user: mockUser
-    });
-  };
-
   useEffect(() => {
     let active = true;
 
@@ -115,42 +81,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(currentUser);
 
       if (currentUser) {
-        if (currentUser.id.startsWith("demo-")) {
-          const storedRole = localStorage.getItem('demo_user_role');
-          setRole(storedRole || 'user');
-          setCanUpdateLocation(true);
-        } else {
-          await fetchProfile(currentUser.id, currentUser.email);
-        }
+        await fetchProfile(currentUser.id, currentUser.email);
       } else {
-        // Check for local demo login fallback
-        const savedDemo = localStorage.getItem('demo_user_role');
-        if (savedDemo) {
-          const demoRole = savedDemo as 'admin' | 'ops_manager' | 'warehouse' | 'tech' | 'road_tech' | 'user';
-          setRole(demoRole);
-          setCanUpdateLocation(true);
-          const demoId = `demo-${demoRole}-id`;
-          const mockUser = {
-            id: demoId,
-            email: `${demoRole}@demo.local`,
-            aud: 'authenticated',
-            role: 'authenticated',
-            app_metadata: {},
-            user_metadata: {},
-            created_at: new Date().toISOString()
-          } as any;
-          setUser(mockUser);
-          setSession({
-            access_token: 'demo-token',
-            token_type: 'bearer',
-            expires_in: 3600,
-            refresh_token: 'demo-refresh',
-            user: mockUser
-          });
-        } else {
-          setRole(null);
-          setCanUpdateLocation(true);
-        }
+        setRole(null);
+        setCanUpdateLocation(true);
       }
       setLoading(false);
     };
@@ -179,7 +113,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, role, isAdmin: role === 'admin', can_update_location: canUpdateLocation, refreshProfile, loginDemo }}>
+    <AuthContext.Provider value={{ user, session, loading, role, isAdmin: role === 'admin', can_update_location: canUpdateLocation, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
@@ -196,15 +130,13 @@ export const useAuth = () => {
   };
 
   const logout = async () => {
-    localStorage.removeItem('demo_user_role');
-    context.loginDemo = () => {}; // dummy
     // Since we are resetting state, try doing it as much as possible synchronously first
     try {
       await supabase.auth.signOut();
     } catch (err) {
       console.warn("Signout error caught:", err);
     }
-    // Hard refresh is extremely safe clean state recovery for demo mode logs
+    // Hard refresh is extremely safe clean state recovery
     window.location.reload();
     return { error: null };
   };

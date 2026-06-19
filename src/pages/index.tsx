@@ -18,11 +18,12 @@ import { useStock } from '../features/inventory/hooks';
 import { Button } from '../components/ui/Button';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTorch } from '../hooks/useTorch';
-import { Lightbulb, AlertTriangle, RefreshCcw, CheckCircle } from 'lucide-react';
+import { Lightbulb, AlertTriangle, RefreshCcw, CheckCircle, QrCode } from 'lucide-react';
 import { NewStockMenu } from '../components/NewStockMenu';
 import VirtualStockList from '../components/VirtualStockList';
 
 export { NewAssetPage } from './NewAssetPage';
+export { FinanceDashboard } from './FinanceDashboard';
 export { AnalyticsPage } from './AnalyticsPage';
 export { AssetDetailsPage } from './AssetDetailsPage';
 export { OrdersPage } from './OrdersPage';
@@ -1733,78 +1734,66 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, loginDemo } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await login(email, password);
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('Logged in successfully!');
-      navigate('/');
+    try {
+      const { error } = await login(email, password);
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success('Access granted');
+        navigate('/');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen h-screen bg-bg-base p-4 animate-fade-in">
-      <form onSubmit={handleLogin} className="bg-bg-elevated p-6 sm:p-8 rounded-xl border border-brand-border w-full max-w-sm shadow-md gap-4 flex flex-col">
-        <h1 className="text-2xl font-bold text-text-primary text-center">Sign In</h1>
-        <div className="space-y-4">
-          <input 
-            type="email" 
-            placeholder="Email" 
-            value={email} 
-            onChange={e => setEmail(e.target.value)} 
-            className="w-full p-3 h-11 min-h-[44px] border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm" 
-            required 
-          />
-          <input 
-            type="password" 
-            placeholder="Password" 
-            value={password} 
-            onChange={e => setPassword(e.target.value)} 
-            className="w-full p-3 h-11 min-h-[44px] border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm" 
-            required 
-          />
-          <button 
-            type="submit" 
-            disabled={loading} 
-            className="w-full bg-brand-gold text-white p-3 h-11 min-h-[44px] rounded-lg hover:bg-brand-gold/90 transition-colors font-medium flex items-center justify-center cursor-pointer text-sm"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-
-          <div className="relative flex py-2 items-center">
-            <div className="flex-grow border-t border-brand-border/60"></div>
-            <span className="flex-shrink mx-4 text-[10px] font-bold text-text-secondary uppercase tracking-wider">Demo / Testing Bypass</span>
-            <div className="flex-grow border-t border-brand-border/60"></div>
+    <div className="min-h-screen bg-bg-base flex items-center justify-center p-4 animate-fade-in">
+      <form onSubmit={handleLogin} className="max-w-md w-full">
+        <div className="bg-bg-elevated p-8 rounded-2xl border border-brand-border shadow-xl space-y-8">
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 bg-brand-gold/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <QrCode className="w-8 h-8 text-brand-gold" />
+            </div>
+            <h1 className="text-2xl font-black text-text-primary tracking-tight">Dallmayr Dispatch</h1>
+            <p className="text-text-secondary text-sm">Secure Logistics Gateway</p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                loginDemo('admin');
-                toast.success('Bypassed as Administrator demo!');
-                navigate('/');
-              }}
-              className="bg-brand-gold/10 hover:bg-brand-gold/20 text-brand-gold border border-brand-gold/30 p-2.5 rounded-lg font-semibold text-xs transition-colors cursor-pointer text-center min-h-[40px] flex items-center justify-center"
+
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary ml-1">Corporate Email</label>
+              <input 
+                type="email" 
+                placeholder="email@dallmayr.com" 
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+                className="w-full p-3 h-11 min-h-[44px] border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm transition-all" 
+                required 
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary ml-1">Access Key</label>
+              <input 
+                type="password" 
+                placeholder="••••••••" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                className="w-full p-3 h-11 min-h-[44px] border border-brand-border rounded-lg bg-bg-base text-text-primary placeholder:text-text-secondary outline-none focus:border-brand-gold text-sm transition-all" 
+                required 
+              />
+            </div>
+            <button 
+              type="submit" 
+              disabled={loading} 
+              className="w-full bg-brand-gold text-white p-3 h-11 min-h-[44px] rounded-lg hover:bg-brand-gold/90 transition-all font-bold flex items-center justify-center cursor-pointer text-sm shadow-lg shadow-brand-gold/20 active:scale-95"
             >
-              🛠️ Demo Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                loginDemo('user');
-                toast.success('Bypassed as Staff User demo!');
-                navigate('/');
-              }}
-              className="bg-text-secondary/10 hover:bg-text-secondary/25 text-text-secondary border border-brand-border/60 p-2.5 rounded-lg font-semibold text-xs transition-colors cursor-pointer text-center min-h-[40px] flex items-center justify-center"
-            >
-              👤 Demo Staff
+              {loading ? 'Authorizing...' : 'Enter System'}
             </button>
           </div>
         </div>

@@ -7,7 +7,8 @@ import {
   Map, 
   MapPin,
   ClipboardList,
-  ShieldAlert
+  ShieldAlert,
+  PieChart
 } from 'lucide-react';
 
 export const ALL_NAV_ITEMS = [
@@ -21,5 +22,6 @@ export const ALL_NAV_ITEMS = [
   { name: 'Scanner', path: '/scanner', icon: QrCode, roles: ['admin', 'ops_manager', 'warehouse', 'tech', 'road_tech', 'user'] },
   { name: 'Analytics', path: '/analytics', icon: BarChart3, roles: ['admin', 'ops_manager'] },
   { name: 'Finance Audit', path: '/finance-audit', icon: ShieldAlert, roles: ['admin', 'finance'] },
+  { name: 'Finance Dashboard', path: '/finance', icon: PieChart, roles: ['admin', 'finance'] },
   { name: 'Settings', path: '/settings', icon: Settings, roles: ['admin', 'ops_manager'] },
 ];

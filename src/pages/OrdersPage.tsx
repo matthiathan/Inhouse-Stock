@@ -109,6 +109,7 @@ export function OrdersPage() {
       const stockItem = availableStockData.find(s => String(s.id) === String(item.stockId));
       return {
         barcode: stockItem?.barcode || '',
+        item_name: stockItem?.item_name || 'Unknown Item',
         requiredQty: item.requiredQty
       };
     }).filter(i => !!i.barcode);

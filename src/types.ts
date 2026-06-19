@@ -98,7 +98,7 @@ export interface ServiceCallLog {
   [key: string]: any;
 }
 
-export type AppRole = 'admin' | 'ops_manager' | 'tech' | 'warehouse' | 'user' | 'road_tech' | 'finance';
+export type AppRole = 'admin' | 'user' | 'tech' | 'road_tech' | 'warehouse' | 'ops_manager' | 'finance';
 
 export interface User {
   id: string;

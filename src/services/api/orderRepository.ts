@@ -41,7 +41,7 @@ export class OrderRepository extends BaseRepository<Order> {
   async createOrderWithItems(
     orderNumber: string, 
     deliveryDate: string, 
-    items: Array<{ barcode: string; requiredQty: number }>
+    items: Array<{ barcode: string; requiredQty: number; item_name: string }>
   ): Promise<Order> {
     // 1. Insert order
     const { data: order, error: orderError } = await supabase
@@ -63,6 +63,7 @@ export class OrderRepository extends BaseRepository<Order> {
         .insert({
           order_id: order.id,
           stock_barcode: item.barcode,
+          item_name: item.item_name,
           required_quantity: item.requiredQty,
           scanned_quantity: 0,
           is_fulfilled: false

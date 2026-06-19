@@ -8,7 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import DashboardLayout from './components/layout/DashboardLayout';
 import { SCLDispatchForm } from './components/SCLDispatchForm';
-import { StockPage, AssetsPage, NewAssetPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage, OrderFulfillmentPage, RoutePlannerPage, TechRoutePage, SCLTechClosurePage, ServiceBillingReport } from './pages';
+import { StockPage, AssetsPage, NewAssetPage, FinanceDashboard, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage, OrderFulfillmentPage, RoutePlannerPage, TechRoutePage, SCLTechClosurePage, ServiceBillingReport } from './pages';
 import { useAuth } from './hooks/useAuth';
 
 interface RoleProtectedRouteProps {
@@ -229,6 +229,14 @@ export default function App() {
               element={
                 <RoleProtectedRoute allowedRoles={['tech', 'road_tech']}>
                   <TechRoutePage />
+                </RoleProtectedRoute>
+              } 
+            />
+            <Route 
+              path="finance" 
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'finance']}>
+                  <FinanceDashboard />
                 </RoleProtectedRoute>
               } 
             />

@@ -52,7 +52,7 @@ export const useCreateOrder = () => {
     }: {
       orderNumber: string;
       deliveryDate: string;
-      items: Array<{ barcode: string; requiredQty: number }>;
+      items: Array<{ barcode: string; requiredQty: number; item_name: string }>;
     }) => orderRepository.createOrderWithItems(orderNumber, deliveryDate, items),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });

@@ -10,7 +10,7 @@ import {
   AlertCircle,
   MapPin
 } from 'lucide-react';
-import { getServiceBillingReport } from '../features/finance/api';
+import { useBillingReport } from '../features/finance/hooks';
 
 export default function ServiceBillingReport() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,10 +18,7 @@ export default function ServiceBillingReport() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
-  const { data: rawData, isLoading } = useQuery({
-    queryKey: ['service-billing-report'],
-    queryFn: getServiceBillingReport
-  });
+  const { data: rawData, isLoading } = useBillingReport();
 
   const filteredData = useMemo(() => {
     if (!rawData) return [];
