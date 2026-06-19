@@ -19,8 +19,9 @@ export function OrdersPage() {
   const { role } = useAuth();
   
   // React Query Hooks
-  const { data: orders, isLoading: loadingOrders } = useOrdersWithItems();
-  const allOrders = orders || [];
+  const { data: dbData, isLoading: loadingOrders } = useOrdersWithItems();
+  const orders = dbData?.orders || [];
+  const orderItems = dbData?.orderItems || [];
 
   const createOrderMutation = useCreateOrder();
   const updateFulfillItemMutation = useUpdateFulfillItem();
@@ -256,7 +257,7 @@ export function OrdersPage() {
       <section className="bg-bg-elevated p-6 rounded-xl border border-brand-border">
         <h2 className="text-lg font-bold text-text-primary mb-4">Active Orders</h2>
         <div className="space-y-2">
-            {allOrders.filter(o => o.status === 'Pending').map(o => (
+            {orders.filter(o => o.status === 'Pending').map(o => (
                 <div key={o.id} className="flex justify-between items-center p-3 border border-brand-border rounded">
                     <span>{o.order_number} - {o.delivery_date}</span>
                     {role === 'warehouse' && (

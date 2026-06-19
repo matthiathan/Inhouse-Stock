@@ -45,14 +45,23 @@ export class OrderRepository extends BaseRepository<Order> {
     return super.update(id, item);
   }
 
-  async getAllOrdersWithItems(): Promise<Order[]> {
-    const { data: orders, error } = await supabase
+  async getAllOrdersWithItems(): Promise<{ orders: Order[]; orderItems: any[] }> {
+    // Single, powerful query to get orders and their linked items instantly
+    const { data, error } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select(`
+        *,
+        order_items (*)
+      `)
       .order('created_at', { ascending: false });
     
     if (error) throw error;
-    return orders as any as Order[];
+
+    return {
+      orders: data as Order[],
+      // Flattens the nested arrays so the UI receives the exact structure it expects
+      orderItems: (data || []).flatMap(order => (order as any).order_items || [])
+    };
   }
 
   async getPendingOrders(): Promise<Order[]> {
@@ -110,12 +119,7 @@ export class OrderRepository extends BaseRepository<Order> {
       .insert({
         order_number: orderNumber,
         delivery_date: deliveryDate,
-        status: 'Pending',
-        items_summary: items.map(item => ({
-          barcode: item.barcode,
-          item_name: item.item_name,
-          required_qty: item.requiredQty
-        }))
+        status: 'Pending'
       })
       .select()
       .single();

@@ -8,8 +8,8 @@ import { Package, Truck, ArrowRight, Clock } from 'lucide-react';
 export function OrderFulfillmentPage() {
   const { role } = useAuth();
   
-  const { data: orders, isLoading: loadingOrders } = useOrdersWithItems();
-  const allOrders = orders || [];
+  const { data: dbData, isLoading: loadingOrders } = useOrdersWithItems();
+  const allOrders = dbData?.orders || [];
   
   const filteredOrders = allOrders.filter(o => o.status === 'Pending');
 
