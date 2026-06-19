@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { CheckCircle, Package, ArrowLeft, RefreshCw, Barcode as BarcodeIcon, Play, QrCode } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -53,7 +53,7 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
   }, [orderId]);
 
   // 2. Progressive Picking Logic
-  const handleScanSuccess = (decodedText: string) => {
+  const handleScanSuccess = useCallback((decodedText: string) => {
     setItems(prevItems => {
       const itemIndex = prevItems.findIndex(i => i.stock_barcode.trim().toLowerCase() === decodedText.trim().toLowerCase());
       
@@ -78,7 +78,7 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
       toast.success(`Picked: ${item.item_name}`);
       return newItems;
     });
-  };
+  }, []);
 
   // 3. Stats & Progress
   const totalRequired = useMemo(() => items.reduce((acc, i) => acc + i.required_quantity, 0), [items]);

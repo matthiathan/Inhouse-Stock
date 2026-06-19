@@ -1,5 +1,5 @@
 import { getNextOrderNumber, getAvailableStock } from '../api/assetApi';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useForm, useFieldArray, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createOrderSchema, CreateOrderSchema } from '../lib/schemas';
@@ -59,6 +59,15 @@ export function OrdersPage() {
   // Use a ref to hold scanner instance
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
+  const fulfillItemRef = useRef(fulfillItem);
+  useEffect(() => {
+    fulfillItemRef.current = fulfillItem;
+  });
+
+  const stableFulfillItem = useCallback((barcode: string) => {
+    fulfillItemRef.current(barcode);
+  }, []);
+
   useEffect(() => {
     if (isScannerOpen && activeOrder) {
       const scanner = new Html5QrcodeScanner("qr-reader", {
@@ -73,7 +82,7 @@ export function OrdersPage() {
         } as any
       }, false);
       scannerRef.current = scanner;
-      scanner.render(fulfillItem, (err) => {
+      scanner.render(stableFulfillItem, (err) => {
           if (err.includes("NotFoundException") || err.includes("No MultiFormat Readers")) return;
           console.warn(err);
       });
@@ -84,7 +93,7 @@ export function OrdersPage() {
         }
       };
     }
-  }, [isScannerOpen, activeOrder]);
+  }, [isScannerOpen, activeOrder, stableFulfillItem]);
 
   const openCreateModal = async () => {
     setIsFetchingStock(true);
@@ -130,7 +139,7 @@ export function OrdersPage() {
     });
   };
 
-  const fulfillItem = async (barcode: string) => {
+  async function fulfillItem(barcode: string) {
     if (!activeOrder || isProcessing) return;
     
     setIsProcessing(true);

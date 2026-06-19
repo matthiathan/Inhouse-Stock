@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -23,7 +23,6 @@ import { NewStockMenu } from '../components/NewStockMenu';
 import VirtualStockList from '../components/VirtualStockList';
 
 export { NewAssetPage } from './NewAssetPage';
-export { FinanceDashboard } from './FinanceDashboard';
 export { AnalyticsPage } from './AnalyticsPage';
 export { AssetDetailsPage } from './AssetDetailsPage';
 export { OrdersPage } from './OrdersPage';
@@ -31,22 +30,15 @@ export { OrderFulfillmentPage } from './OrderFulfillmentPage';
 export { RoutePlannerPage } from './RoutePlannerPage';
 export { TechRoutePage } from './TechRoutePage';
 export { default as SCLTechClosurePage } from './SCLTechClosurePage';
-export { default as ServiceBillingReport } from './ServiceBillingReport';
+export { default as ServiceTasksPage } from './ServiceTasksPage';
 
 export function StockPage() {
   const { role } = useAuth();
   const queryClient = useQueryClient();
-  const { data: hookStockItems = [], isLoading: hookLoading, error } = useStock();
+  const { data: hookStockItems, isLoading: hookLoading, error } = useStock();
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [detectedTable, setDetectedTable] = useState<'stock' | 'inventory' | 'local'>('stock');
-
-  useEffect(() => {
-    if (hookStockItems.length !== stockItems.length || hookLoading !== loading) {
-       setStockItems(hookStockItems);
-       setLoading(hookLoading);
-    }
-  }, [hookStockItems, hookLoading]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -69,11 +61,11 @@ export function StockPage() {
   const [searchParams] = useSearchParams();
 
   // Integrated Barcode Ingestion logic
-  const handleScanSuccess = async (decodedText: string) => {
+  const handleScanSuccess = useCallback(async (decodedText: string) => {
     setIsScanning(false);
     setScannedBarcode(decodedText);
     setIsModalOpen(true);
-  };
+  }, []);
 
   useScanner('stock-scanner', handleScanSuccess, { 
     fps: 10, 
@@ -82,13 +74,13 @@ export function StockPage() {
     videoConstraints: { facingMode: "environment" }
   }, isScanning);
 
+  const barcodeParam = searchParams.get('barcode');
   useEffect(() => {
-    const barcodeParam = searchParams.get('barcode');
     if (barcodeParam) {
       setScannedBarcode(barcodeParam);
       setIsModalOpen(true);
     }
-  }, [searchParams]);
+  }, [barcodeParam]);
 
   useEffect(() => {
     const detectAndFetch = async () => {
@@ -485,10 +477,10 @@ export function AssetsPage() {
   }, [isAddModalOpen]);
 
   // Check URL parameters to auto-open and populate the register form
+  const actionParam = searchParams.get('action');
+  const qrParam = searchParams.get('qr');
   useEffect(() => {
-    const action = searchParams.get('action');
-    const qrParam = searchParams.get('qr');
-    if (action === 'add_machine') {
+    if (actionParam === 'add_machine') {
       setIsAddModalOpen(true);
       if (qrParam) {
         setAddForm(prev => ({
@@ -497,7 +489,7 @@ export function AssetsPage() {
         }));
       }
     }
-  }, [searchParams]);
+  }, [actionParam, qrParam]);
 
   const handleCloseAddModal = () => {
     setIsAddModalOpen(false);

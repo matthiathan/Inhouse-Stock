@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { MapPin, Clock, User, CheckCircle, Play } from 'lucide-react';
@@ -11,9 +11,11 @@ export function TechRoutePage() {
   const { data: tasks = [], isLoading, error } = useTechRoute(user?.id || '');
   const { mutate: updateStatus } = useUpdateTaskStatus();
 
-  if (error) {
-    toast.error("Failed to load tasks");
-  }
+  useEffect(() => {
+    if (error) {
+      toast.error("Failed to load tasks: " + (error as any).message);
+    }
+  }, [error]);
 
   if (isLoading) return <div>Loading...</div>;
 

@@ -87,6 +87,8 @@ export function AssetDetailsPage() {
         }
     };
 
+    const actionParam = searchParams.get('action');
+
     useEffect(() => {
         const fetchAssetData = async () => {
             if (!id) return;
@@ -97,9 +99,8 @@ export function AssetDetailsPage() {
 
                 await fetchTickets();
 
-                const action = searchParams.get('action');
-                if (action === 'update_section') setIsModalOpen(true);
-                if (action === 'log_maintenance') setIsTicketModalOpen(true);
+                if (actionParam === 'update_section') setIsModalOpen(true);
+                if (actionParam === 'log_maintenance') setIsTicketModalOpen(true);
             } catch (err: any) {
                 toast.error("Error loading asset details: " + err.message);
             } finally {
@@ -107,7 +108,7 @@ export function AssetDetailsPage() {
             }
         };
         fetchAssetData();
-    }, [id, searchParams]);
+    }, [id, actionParam]);
 
     // Create ticket submission handler (Admins & Ops Managers)
     const handleSubmitTicket = async (e: React.FormEvent) => {

@@ -55,7 +55,7 @@ export default function DashboardLayout() {
     return <Navigate to={navItems[0]?.path || '/'} replace />;
   }
 
-  if (location.pathname === '/' && navItems.length > 0) {
+  if (location.pathname === '/' && navItems.length > 0 && navItems[0].path !== '/') {
     return <Navigate to={navItems[0].path} replace />;
   }
 

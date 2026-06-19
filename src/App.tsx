@@ -8,7 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import DashboardLayout from './components/layout/DashboardLayout';
 import { SCLDispatchForm } from './components/SCLDispatchForm';
-import { StockPage, AssetsPage, NewAssetPage, FinanceDashboard, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage, OrderFulfillmentPage, RoutePlannerPage, TechRoutePage, SCLTechClosurePage, ServiceBillingReport } from './pages';
+import { StockPage, AssetsPage, NewAssetPage, ScannerPage, SettingsPage, LoginPage, AssetDetailsPage, CustomerDetailsPage, AnalyticsPage, OrdersPage, OrderFulfillmentPage, RoutePlannerPage, TechRoutePage, SCLTechClosurePage, ServiceTasksPage } from './pages';
 import { useAuth } from './hooks/useAuth';
 
 interface RoleProtectedRouteProps {
@@ -177,14 +177,6 @@ export default function App() {
               } 
             />
             <Route 
-              path="finance-audit" 
-              element={
-                <RoleProtectedRoute allowedRoles={['admin', 'finance']}>
-                  <ServiceBillingReport />
-                </RoleProtectedRoute>
-              } 
-            />
-            <Route 
               path="routes" 
               element={
                 <RoleProtectedRoute allowedRoles={['admin', 'ops_manager']}>
@@ -233,10 +225,10 @@ export default function App() {
               } 
             />
             <Route 
-              path="finance" 
+              path="tasks" 
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'finance']}>
-                  <FinanceDashboard />
+                <RoleProtectedRoute allowedRoles={['admin', 'ops_manager', 'finance']}>
+                  <ServiceTasksPage />
                 </RoleProtectedRoute>
               } 
             />

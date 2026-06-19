@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { supabase } from '../lib/supabase';
@@ -57,6 +57,15 @@ export default function SCLTechClosurePage() {
     }
   }, [sclId]);
 
+  const onScanSuccessRef = useRef(onScanSuccess);
+  useEffect(() => {
+    onScanSuccessRef.current = onScanSuccess;
+  });
+
+  const stableScanSuccess = useCallback((decodedText: string) => {
+    onScanSuccessRef.current(decodedText);
+  }, []);
+
   useEffect(() => {
     if (step === 1) {
       const scanner = new Html5QrcodeScanner("qr-reader", {
@@ -65,7 +74,7 @@ export default function SCLTechClosurePage() {
         aspectRatio: 1.0,
       }, false);
       scannerRef.current = scanner;
-      scanner.render(onScanSuccess, (err) => {
+      scanner.render(stableScanSuccess, (err) => {
         if (err.includes("NotFoundException")) return;
         // ignore continuous warnings
       });
@@ -73,9 +82,9 @@ export default function SCLTechClosurePage() {
         scanner.clear().catch(console.error);
       };
     }
-  }, [step]);
+  }, [step, stableScanSuccess]);
 
-  const onScanSuccess = async (decodedText: string) => {
+  async function onScanSuccess(decodedText: string) {
     if (scannerRef.current) {
         scannerRef.current.clear().catch(console.error);
     }

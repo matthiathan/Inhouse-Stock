@@ -19,11 +19,13 @@ import {
   logStateTransition 
 } from '../utils/sclStateMachine';
 
+const EMPTY_ARRAY: any[] = [];
+
 export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
   const [region, setRegion] = useState<'KZN' | 'JHB' | 'CPT'>('KZN');
   const submitSclMutation = useSubmitSCL();
 
-  const { data: customers = [], isLoading: isCustomersLoading } = useQuery({
+  const { data: customers = EMPTY_ARRAY, isLoading: isCustomersLoading } = useQuery({
     queryKey: ['contract-customers', region],
     queryFn: async () => {
       const names = await contractRepository.getContractCustomers(region);
@@ -103,8 +105,10 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
         setFilteredMachines(filtered);
         
         // Reset serial select if no longer matching
-        setValue('serial_number', '');
-        setValue('qrcode', '');
+        if (selectedSerialNumber && !filtered.some(m => m.serial_number === selectedSerialNumber)) {
+          setValue('serial_number', '');
+          setValue('qrcode', '');
+        }
       } else {
         setFilteredMachines([]);
       }
