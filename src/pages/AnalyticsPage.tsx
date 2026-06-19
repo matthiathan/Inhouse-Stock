@@ -266,7 +266,7 @@ export function AnalyticsPage() {
       ) : (
         <>
           {/* KPI Dashboard Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
             {/* KPI 1 */}
             <motion.div 
               initial={{ opacity: 0, y: 10 }}
@@ -511,7 +511,7 @@ export function AnalyticsPage() {
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-bg-elevated border border-brand-border rounded-2xl shadow-sm overflow-hidden" id="part-movement-pane">
                 {/* Panel Header */}
-                <div className="p-6 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-bg-elevated/50">
+                <div className="p-6 border-b border-brand-border flex flex-col md:flex-row gap-4 items-start md:items-center justify-between bg-bg-elevated/50">
                   <div>
                     <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
                       <LayoutGrid size={20} className="text-brand-gold" />
@@ -522,21 +522,24 @@ export function AnalyticsPage() {
                     </p>
                   </div>
 
-                  {/* Search Bar */}
-                  <div className="relative w-full sm:w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
-                    <input
-                      type="text"
-                      placeholder="Search part name or barcode..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2 border border-brand-border rounded-lg bg-bg-base text-text-primary text-xs outline-none focus:border-brand-gold placeholder-text-secondary/60 transition-all"
-                    />
+                  {/* Search and Filters */}
+                  <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3">
+                    <div className="relative w-full md:w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
+                      <input
+                        type="text"
+                        placeholder="Search part name or barcode..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 border border-brand-border rounded-lg bg-bg-base text-text-primary text-xs outline-none focus:border-brand-gold placeholder-text-secondary/60 transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Table */}
-                <div className="overflow-x-auto">
+                {/* Table Wrapper with overflow-x-auto and min-width to prevent squishing */}
+                <div className="overflow-x-auto w-full">
                   {filteredStock.length === 0 ? (
                     <div className="p-12 text-center text-text-secondary">
                       <Package size={36} className="mx-auto text-text-secondary/40 mb-3" />
@@ -544,7 +547,7 @@ export function AnalyticsPage() {
                       <p className="text-xs text-text-secondary mt-1">Try relaxing your search filter or syncing with database.</p>
                     </div>
                   ) : (
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full min-w-[800px] text-left border-collapse">
                       <thead>
                         <tr className="bg-bg-base/40 text-text-secondary text-xs uppercase font-bold tracking-wider border-b border-brand-border">
                           <th className="py-4 px-5">Part details</th>

@@ -8,10 +8,10 @@ import { Package, Truck, ArrowRight, Clock } from 'lucide-react';
 export function OrderFulfillmentPage() {
   const { role } = useAuth();
   
-  const { data: dbData, isLoading: loadingOrders } = useOrdersWithItems();
-  const allOrders = dbData?.orders || [];
+  const { data: orders, isLoading: loadingOrders } = useOrdersWithItems();
+  const allOrders = orders || [];
   
-  const orders = allOrders.filter(o => o.status === 'Pending');
+  const filteredOrders = allOrders.filter(o => o.status === 'Pending');
 
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
 
@@ -51,11 +51,11 @@ export function OrderFulfillmentPage() {
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-brand-gold animate-pulse" />
-            Pending Shipments ({orders.length})
+            Pending Shipments ({filteredOrders.length})
           </h2>
         </div>
 
-        {orders.length === 0 ? (
+        {filteredOrders.length === 0 ? (
           <div className="p-10 text-center bg-white rounded-3xl border-2 border-dashed border-gray-100 flex flex-col items-center gap-3">
             <div className="w-16 h-16 bg-gray-50 text-gray-300 rounded-full flex items-center justify-center mb-2">
               <Truck size={32} />
@@ -65,7 +65,7 @@ export function OrderFulfillmentPage() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {orders.map(o => (
+            {filteredOrders.map(o => (
               <div 
                 key={o.id} 
                 className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm transition-all hover:shadow-md"

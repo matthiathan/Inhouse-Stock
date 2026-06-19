@@ -78,6 +78,8 @@ export interface Order {
   delivery_date: string;
   status: 'Pending' | 'Fulfilled' | 'Cancelled';
   created_at: string;
+  items_summary?: Array<{ barcode: string; item_name: string; required_qty: number }>;
+  order_items?: OrderItem[];
 }
 
 export interface OrderItem {

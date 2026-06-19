@@ -76,7 +76,12 @@ export type ServiceCallLogSchemaValue = z.infer<typeof serviceCallLogSchema>;
 export const dbOrderSchema = z.object({
   order_number: z.string().min(1, "Order number is required"),
   delivery_date: z.string().min(1, "Delivery date is required"),
-  status: z.enum(['Pending', 'Fulfilled', 'Cancelled']).default('Pending')
+  status: z.enum(['Pending', 'Fulfilled', 'Cancelled']).default('Pending'),
+  items_summary: z.array(z.object({
+    barcode: z.string(),
+    item_name: z.string(),
+    required_qty: z.number()
+  })).optional()
 });
 
 export type DbOrderSchemaValue = z.infer<typeof dbOrderSchema>;

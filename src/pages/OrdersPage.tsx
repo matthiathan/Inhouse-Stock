@@ -19,9 +19,8 @@ export function OrdersPage() {
   const { role } = useAuth();
   
   // React Query Hooks
-  const { data: dbData, isLoading: loadingOrders } = useOrdersWithItems();
-  const orders = dbData?.orders || [];
-  const orderItems = dbData?.orderItems || [];
+  const { data: orders, isLoading: loadingOrders } = useOrdersWithItems();
+  const allOrders = orders || [];
 
   const createOrderMutation = useCreateOrder();
   const updateFulfillItemMutation = useUpdateFulfillItem();
@@ -140,10 +139,10 @@ export function OrdersPage() {
   };
 
   async function fulfillItem(barcode: string) {
-    if (!activeOrder || isProcessing) return;
+    if (!activeOrder || isProcessing || !activeOrder.order_items) return;
     
     setIsProcessing(true);
-    const item = orderItems.find(i => i.order_id === activeOrder.id && i.stock_barcode === barcode && !i.is_fulfilled);
+    const item = activeOrder.order_items.find(i => i.stock_barcode === barcode && !i.is_fulfilled);
     
     if (!item) {
         setLastScannedResult({barcode, success: false, message: "Item not found or already fulfilled"});
@@ -190,7 +189,7 @@ export function OrdersPage() {
     });
   };
 
-  const isAllFulfilled = activeOrder && orderItems.filter(i => i.order_id === activeOrder.id).every(i => i.is_fulfilled);
+  const isAllFulfilled = activeOrder?.order_items?.every(i => i.is_fulfilled);
 
   if (loadingOrders) return <div>Loading...</div>;
 
@@ -257,7 +256,7 @@ export function OrdersPage() {
       <section className="bg-bg-elevated p-6 rounded-xl border border-brand-border">
         <h2 className="text-lg font-bold text-text-primary mb-4">Active Orders</h2>
         <div className="space-y-2">
-            {orders.filter(o => o.status === 'Pending').map(o => (
+            {allOrders.filter(o => o.status === 'Pending').map(o => (
                 <div key={o.id} className="flex justify-between items-center p-3 border border-brand-border rounded">
                     <span>{o.order_number} - {o.delivery_date}</span>
                     {role === 'warehouse' && (
@@ -275,10 +274,10 @@ export function OrdersPage() {
                 
                 {/* Progress Tracking */}
                 {(() => {
-                    const items = orderItems.filter(i => i.order_id === activeOrder.id);
+                    const items = activeOrder.order_items || [];
                     const totalQty = items.reduce((s, i) => s + i.required_quantity, 0);
                     const scannedQty = items.reduce((s, i) => s + i.scanned_quantity, 0);
-                    const progress = Math.round((scannedQty / totalQty) * 100);
+                    const progress = totalQty > 0 ? Math.round((scannedQty / totalQty) * 100) : 0;
                     return (
                         <div className="mb-4">
                             <div className="flex justify-between text-xs text-text-secondary mb-1">
@@ -304,7 +303,7 @@ export function OrdersPage() {
                 <div className="mt-2 font-bold text-xs text-text-secondary">Items scanned this session: {totalScannedCount}</div>
                 
                 <div className="mt-4 space-y-2 max-h-[300px] overflow-y-auto">
-                    {orderItems.filter(i => i.order_id === activeOrder.id).map(i => {
+                    {(activeOrder.order_items || []).map(i => {
                         const stockItem = availableStockData.find(s => String(s.barcode) === String(i.stock_barcode));
                         return (
                             <div key={i.id} className={`p-3 rounded border flex items-center justify-between ${i.is_fulfilled ? 'bg-emerald-900/20 border-emerald-900' : 'bg-bg-base border-brand-border'}`}>
