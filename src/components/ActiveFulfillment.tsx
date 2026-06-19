@@ -91,7 +91,10 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
       // Update DB
       const { error } = await supabase
         .from('order_items')
-        .update({ scanned_quantity: itemToUpdate.scanned_quantity + 1 })
+        .update({ 
+          scanned_quantity: itemToUpdate.scanned_quantity + 1,
+          is_fulfilled: itemToUpdate.scanned_quantity + 1 >= itemToUpdate.required_quantity
+        })
         .eq('id', itemToUpdate.id);
       
       if (error) throw error;
@@ -102,7 +105,8 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
         const index = newItems.findIndex(i => i.id === itemToUpdate.id);
         newItems[index] = {
           ...newItems[index],
-          scanned_quantity: newItems[index].scanned_quantity + 1
+          scanned_quantity: newItems[index].scanned_quantity + 1,
+          is_fulfilled: newItems[index].scanned_quantity + 1 >= newItems[index].required_quantity
         };
         return newItems;
       });
@@ -150,19 +154,7 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
 
       if (itemsError) throw itemsError;
 
-      // Step C: Atomically Decrement Stock via RPC
-      const stockDecrementPromises = items.map(item => 
-        supabase.rpc('decrement_stock', {
-          target_barcode: item.stock_barcode,
-          decrement_amount: item.scanned_quantity
-        })
-      );
-
-      const results = await Promise.all(stockDecrementPromises);
-      const firstError = results.find(r => r.error);
-      if (firstError) throw firstError.error;
-
-      toast.success("Order fulfilled and inventory updated!");
+      toast.success("Order fulfilled!");
       onClose();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
