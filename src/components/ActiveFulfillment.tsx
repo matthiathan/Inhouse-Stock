@@ -43,8 +43,9 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
         }));
         
         setItems(initialized);
-      } catch (err: any) {
-        toast.error("Failed to load order items: " + err.message);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error("Failed to load order items: " + message);
       } finally {
         setLoading(false);
       }
@@ -124,8 +125,9 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
 
       toast.success("Order fulfilled and inventory updated!");
       onClose();
-    } catch (err: any) {
-      toast.error("Fulfillment failed: " + err.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error("Fulfillment failed: " + message);
     } finally {
       setIsCompleting(false);
     }

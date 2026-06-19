@@ -89,7 +89,7 @@ export const useSubmitSCL = () => {
   }, [queryClient]);
 
   return useMutation({
-    mutationFn: async (formData: any) => {
+    mutationFn: async (formData: Omit<ServiceCallLog, 'id' | 'created_at'>) => {
       // 1. Check network status before attempting database call
       if (!navigator.onLine) {
         // 2. Save to local storage if offline
@@ -108,7 +108,7 @@ export const useSubmitSCL = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sclTasks'] });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       if (error.message === 'OFFLINE_SAVED') {
         toast.info("No internet. Form saved offline and will sync automatically.");
       } else {

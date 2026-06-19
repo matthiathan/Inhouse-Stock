@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
+import { NormalizedCustomer } from '../../types';
 
 export interface SupabaseCustomerRow {
     id: string;
@@ -11,12 +12,15 @@ export interface SupabaseCustomerRow {
     "longitude": number | null;
     "created_at": string | null;
     "code": string | null; // some tables might use code instead of A/C Code
+    "name"?: string | null;
+    "address"?: string | null;
+    "region"?: string | null;
 }
 
 export const useCustomers = () => {
     return useQuery({
         queryKey: ['customers'],
-        queryFn: async (): Promise<any[]> => {
+        queryFn: async (): Promise<NormalizedCustomer[]> => {
             const { data, error } = await supabase
                 .from('customers')
                 // 2. Write a Supabase .select() query that explicitly requests exact string names
@@ -41,8 +45,10 @@ export const useCustomers = () => {
                 throw error;
             }
 
+            const rawData = (data || []) as unknown as SupabaseCustomerRow[];
+
             // 3. Transformation layer inside the queryFn to sanitize this data
-            return (data || []).map((row: any) => {
+            return rawData.map((row) => {
                 const code = row["A/C Code"] || row["code"] || "N/A";
                 const name = row["Name"] || row["name"] || "N/A";
                 const address = row["Address"] || row["address"] || "N/A";

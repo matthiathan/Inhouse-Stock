@@ -4,6 +4,22 @@ export interface UnifiedCustomer {
   address: string;
 }
 
+export interface NormalizedCustomer {
+  id: string;
+  code: string;
+  name: string;
+  address: string;
+  region: string;
+  latitude: number;
+  longitude: number;
+  created_at: string;
+  "A/C Code": string;
+  "Name": string;
+  "Address": string;
+  "Region": string;
+  details: Record<string, unknown>;
+}
+
 export interface MaintenanceTicket {
   id: string;
   machine_id: string;
@@ -95,6 +111,26 @@ export interface ServiceCallLog {
   address?: string;
   qrcode?: string;
   service_type?: string;
+  [key: string]: any;
+}
+
+export interface FinanceServiceRecord {
+  id: string;
+  customer_id?: string;
+  asset_id?: string;
+  assigned_employee_id?: string;
+  status?: string;
+  priority?: string;
+  doc_no?: string;
+  do_number?: string;
+  narration?: string;
+  photo_url?: string | null;
+  closed_remarks?: string | null;
+  closed_date?: string | null;
+  date_closed?: string | null;
+  created_at?: string;
+  date_created?: string | null;
+  region?: string | null;
   [key: string]: any;
 }
 

@@ -7,6 +7,7 @@ import { sclRepository } from '../features/dispatch/repository';
 import { toast } from 'sonner';
 import { Camera, CheckCircle2, AlertTriangle, ArrowLeft, RefreshCw, Smartphone } from 'lucide-react';
 import { validateSclTransition, logStateTransition, SclStatus } from '../utils/sclStateMachine';
+import { useAuth } from '../hooks/useAuth';
 import { z } from 'zod';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -29,6 +30,7 @@ type ClosureFormValues = z.infer<typeof closureSchema>;
 export default function SCLTechClosurePage() {
   const { sclId } = useParams<{ sclId: string }>();
   const navigate = useNavigate();
+  const { role: userRole } = useAuth();
   
   const [step, setStep] = useState(1);
   const [scannedMachine, setScannedMachine] = useState<any>(null);
@@ -117,7 +119,8 @@ export default function SCLTechClosurePage() {
     const validation = validateSclTransition(
        currentStatus,
        data.status as SclStatus,
-       data.notes
+       data.notes,
+       userRole || undefined
     );
     
     if (!validation.valid) {

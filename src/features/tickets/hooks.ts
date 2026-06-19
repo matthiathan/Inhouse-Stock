@@ -41,7 +41,7 @@ export const useOpenTickets = () => {
 export const useCreateTicket = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: (data: Omit<MaintenanceTicket, 'id' | 'created_at'>) => ticketRepository.create(data as any),
+        mutationFn: (data: Omit<MaintenanceTicket, 'id' | 'created_at'>) => ticketRepository.create(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['tickets'] });
         }

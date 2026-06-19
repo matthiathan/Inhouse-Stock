@@ -2,12 +2,14 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SearchX, Loader2 } from 'lucide-react';
 
-interface Column<T> {
-  header: string;
-  accessorKey: keyof T;
-  cell?: (value: any, item: T) => React.ReactNode;
-  className?: string;
-}
+export type Column<T> = {
+  [K in keyof T]: {
+    header: string;
+    accessorKey: K;
+    cell?: (value: T[K], item: T) => React.ReactNode;
+    className?: string;
+  }
+}[keyof T];
 
 interface DataTableProps<T> {
   data: T[];
@@ -71,7 +73,7 @@ export function DataTable<T extends { id?: string | number }>({
                     {columns.map((col, i) => (
                       <td key={i} className={`p-4 ${col.className || ''}`}>
                         {col.cell 
-                          ? col.cell(item[col.accessorKey], item) 
+                          ? col.cell(item[col.accessorKey] as never, item) 
                           : (item[col.accessorKey] as React.ReactNode)}
                       </td>
                     ))}

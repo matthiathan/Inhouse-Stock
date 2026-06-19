@@ -4,12 +4,23 @@ import { Camera, Barcode, Plus, Minus, Save, RefreshCcw, CheckCircle, Package } 
 import { uploadStockPhoto } from '../lib/storage';
 import { stockRepository } from '../features/inventory/repository';
 import { toast } from 'sonner';
+import { StockItem } from '../types';
 
 interface NewStockMenuProps {
   onSuccess: () => void;
   onCancel: () => void;
   initialBarcode?: string;
-  existingItems?: any[];
+  existingItems?: StockItem[];
+}
+
+interface StockFormValues {
+  barcode: string;
+  item_name: string;
+  units_per_box: number;
+  box_quantity: number;
+  image_url: string;
+  notes: string;
+  sku?: string;
 }
 
 export function NewStockMenu({ onSuccess, onCancel, initialBarcode = '', existingItems = [] }: NewStockMenuProps) {
@@ -17,7 +28,7 @@ export function NewStockMenu({ onSuccess, onCancel, initialBarcode = '', existin
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
-  const { register, handleSubmit, watch, setValue, reset } = useForm({
+  const { register, handleSubmit, watch, setValue, reset } = useForm<StockFormValues>({
     defaultValues: {
       barcode: initialBarcode,
       item_name: '',
@@ -76,7 +87,7 @@ export function NewStockMenu({ onSuccess, onCancel, initialBarcode = '', existin
     }
   };
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: StockFormValues) => {
     setIsSaving(true);
     try {
       const totalQuantity = (data.units_per_box || 1) * (data.box_quantity || 0);
@@ -97,8 +108,9 @@ export function NewStockMenu({ onSuccess, onCancel, initialBarcode = '', existin
       reset();
       setPreviewUrl(null);
       onSuccess();
-    } catch (error: any) {
-      toast.error('Save failed: ' + error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error('Save failed: ' + message);
     } finally {
       setIsSaving(false);
     }

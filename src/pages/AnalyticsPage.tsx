@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { 
   BarChart3, 
@@ -11,15 +10,26 @@ import {
   RefreshCw,
   TrendingDown,
   TrendingUp,
-  LayoutGrid
+  LayoutGrid,
+  MapPin,
+  ClipboardList
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useRegionalAnalytics } from '../services/queries';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area
+} from 'recharts';
 
 export function AnalyticsPage() {
-  const [machines, setMachines] = useState<any[]>([]);
-  const [stockItems, setStockItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [detectedTable, setDetectedTable] = useState<'stock' | 'inventory'>('stock');
+  const [selectedRegion, setSelectedRegion] = useState<'JHB' | 'KZN' | 'CPT' | 'ALL'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   
   // Interactive audit simulation state helper
@@ -27,53 +37,22 @@ export function AnalyticsPage() {
   const [auditedCount, setAuditedCount] = useState<number>(0);
   const [simulatedVariance, setSimulatedVariance] = useState<number | null>(null);
 
-  const fetchData = async () => {
-    setLoading(true);
+  // Load regionalized datasets from single cache-optimized react-query provider
+  const { data: analyticsData, isLoading, error, refetch } = useRegionalAnalytics(selectedRegion);
+
+  const machines = analyticsData?.machines || [];
+  const stockItems = analyticsData?.stockItems || [];
+  const serviceLogs = analyticsData?.serviceLogs || [];
+  const customers = analyticsData?.customers || [];
+
+  const handleRefresh = async () => {
     try {
-      // 1. Fetch fleet machines count
-      const { data: machinesData, error: machinesError } = await supabase
-        .from('machines')
-        .select('*');
-      
-      if (machinesError) {
-        console.warn("Machines fetch issue, defaulting to mock/empty", machinesError);
-      } else {
-        setMachines(machinesData || []);
-      }
-
-      // 2. Fetch stock data with auto-detection (trying 'stock' and then 'inventory')
-      const { data: stockData, error: stockError } = await supabase
-        .from('stock')
-        .select('*');
-
-      if (!stockError && stockData) {
-        setStockItems(stockData);
-        setDetectedTable('stock');
-      } else {
-        // Fallback to 'inventory'
-        const { data: invData, error: invError } = await supabase
-          .from('inventory')
-          .select('*');
-
-        if (!invError && invData) {
-          setStockItems(invData);
-          setDetectedTable('inventory');
-        } else {
-          console.error("Failed to load inventory tables", stockError || invError);
-          setStockItems([]);
-        }
-      }
-    } catch (err: any) {
-      console.error("Exception during analytics fetch:", err);
-      toast.error("Some analytics data could not be fetched. Displaying fallback statistics.");
-    } finally {
-      setLoading(false);
+      await refetch();
+      toast.success("Branch metrics successfully synchronized!");
+    } catch (err) {
+      toast.error("Synchronize failed. Please check backend connection.");
     }
   };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   // Sync simulation count when selected item changed
   useEffect(() => {
@@ -136,6 +115,94 @@ export function AnalyticsPage() {
     return name.includes(search) || barcode.includes(search);
   });
 
+  // Process service logs to build a timeline chart for closed service calls
+  const getClosedCallsTimelineData = () => {
+    const closedLogs = serviceLogs.filter(l => {
+      const statusValue = l.status || l.current_status || '';
+      return statusValue.toLowerCase() === 'closed' && (l.date_closed || l.closed_date);
+    });
+
+    const grouped: { [key: string]: { date: string; count: number; JHB: number; KZN: number; CPT: number } } = {};
+
+    closedLogs.forEach(l => {
+      const rawDateStr = l.date_closed || l.closed_date || '';
+      if (!rawDateStr) return;
+
+      let dateKey = rawDateStr.split('T')[0] || rawDateStr;
+      
+      try {
+        const d = new Date(dateKey);
+        if (!isNaN(d.getTime())) {
+          dateKey = d.toLocaleDateString('en-ZA', { month: 'short', day: 'numeric' });
+        }
+      } catch {
+        dateKey = dateKey.substring(5, 10);
+      }
+
+      let reg: 'JHB' | 'KZN' | 'CPT' | 'Unknown' = 'Unknown';
+      if (l.region) {
+        const rValue = String(l.region).toUpperCase();
+        if (rValue === 'JHB' || rValue === 'KZN' || rValue === 'CPT') {
+          reg = rValue as any;
+        }
+      }
+      if (reg === 'Unknown' && l.customer_id) {
+        const cust = customers.find(c => c.id === l.customer_id);
+        if (cust && cust.region) {
+          const r = cust.region.toUpperCase();
+          if (r === 'JHB' || r === 'KZN' || r === 'CPT') reg = r as any;
+        }
+      }
+      if (reg === 'Unknown') {
+        const doc = String(l.doc_no || l.do_number || '');
+        if (doc.startsWith('CA21')) reg = 'JHB';
+        else if (doc.startsWith('CA31')) reg = 'CPT';
+        else if (doc.startsWith('CA41')) reg = 'KZN';
+      }
+
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = { date: dateKey, count: 0, JHB: 0, KZN: 0, CPT: 0 };
+      }
+
+      grouped[dateKey].count += 1;
+      if (reg !== 'Unknown') {
+        grouped[dateKey][reg] += 1;
+      }
+    });
+
+    const sorted = Object.values(grouped).sort((a, b) => {
+      try {
+        const da = new Date(a.date + " 2026");
+        const db = new Date(b.date + " 2026");
+        return da.getTime() - db.getTime();
+      } catch {
+        return a.date.localeCompare(b.date);
+      }
+    });
+
+    if (sorted.length === 0) {
+      const today = new Date();
+      const mockList = [];
+      for (let i = 4; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const dateKey = d.toLocaleDateString('en-ZA', { month: 'short', day: 'numeric' });
+        mockList.push({
+          date: dateKey,
+          count: 0,
+          JHB: 0,
+          KZN: 0,
+          CPT: 0
+        });
+      }
+      return mockList;
+    }
+
+    return sorted;
+  };
+
+  const timelineData = getClosedCallsTimelineData();
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 text-text-primary">
       {/* Page Header */}
@@ -150,18 +217,39 @@ export function AnalyticsPage() {
           </p>
         </div>
         <button
-          onClick={fetchData}
+          onClick={handleRefresh}
           className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-bg-elevated border border-brand-border text-text-primary hover:bg-bg-base transition-all cursor-pointer min-h-[44px] shadow-sm self-start sm:self-auto"
         >
-          <RefreshCw size={16} className={loading ? "animate-spin text-brand-gold" : "text-text-secondary"} />
-          Refresh Metrics
+          <RefreshCw size={16} className={isLoading ? "animate-spin text-brand-gold" : "text-text-secondary"} />
+          Sync Metrics
         </button>
       </div>
 
-      {loading ? (
+      {/* Regional Selector Strip */}
+      <div className="bg-bg-elevated border border-brand-border p-1.5 rounded-xl flex flex-wrap gap-2 w-fit shadow-xs">
+        {(['ALL', 'JHB', 'KZN', 'CPT'] as const).map((reg) => (
+          <button
+            key={reg}
+            onClick={() => {
+              setSelectedRegion(reg);
+              setSelectedSimItem('');
+            }}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all min-h-[38px] cursor-pointer ${
+              selectedRegion === reg
+                ? 'bg-brand-gold text-white shadow-sm'
+                : 'text-text-secondary hover:text-text-primary hover:bg-bg-base'
+            }`}
+            id={`region-btn-${reg.toLowerCase()}`}
+          >
+            {reg === 'ALL' ? '🗺️ All Regions' : reg === 'JHB' ? '🏙️ Johannesburg' : reg === 'KZN' ? '🌴 Durban (KZN)' : '🏔️ Cape Town'}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
         <div className="p-16 text-center text-text-secondary flex flex-col items-center gap-2">
           <div className="w-10 h-10 border-4 border-brand-gold border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm font-semibold mt-2">Aggregating database statistics...</p>
+          <p className="text-sm font-semibold mt-2">Aggregating database statistics across branches...</p>
         </div>
       ) : (
         <>
@@ -181,7 +269,9 @@ export function AnalyticsPage() {
               <div className="space-y-1">
                 <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Monitored Fleet Assets</p>
                 <p className="text-3xl font-extrabold text-text-primary font-mono">{machines.length}</p>
-                <p className="text-xs text-text-secondary">Active machines registered in database</p>
+                <p className="text-xs text-text-secondary">
+                  {selectedRegion === 'ALL' ? 'Active fleet machines' : `Fleet registered in ${selectedRegion}`}
+                </p>
               </div>
             </motion.div>
 
@@ -193,13 +283,15 @@ export function AnalyticsPage() {
               className="bg-bg-elevated border border-brand-border p-6 rounded-2xl shadow-sm hover:border-brand-border/80 transition-all flex items-start gap-4"
               id="kpi-sku-diversity"
             >
-              <div className="p-3 bg-blue-500/10 text-blue-500 rounded-xl">
+              <div className="p-3 bg-brand-gold/10 text-brand-gold rounded-xl">
                 <Package size={24} />
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">SKU Catalog Diversity</p>
                 <p className="text-3xl font-extrabold text-text-primary font-mono">{uniqueSkus}</p>
-                <p className="text-xs text-text-secondary">Unique catalog parts/barcodes detected</p>
+                <p className="text-xs text-text-secondary">
+                  {selectedRegion === 'ALL' ? 'Unique catalog barcodes' : `Stocked parts types in ${selectedRegion}`}
+                </p>
               </div>
             </motion.div>
 
@@ -209,19 +301,197 @@ export function AnalyticsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.2 }}
               className="bg-bg-elevated border border-brand-border p-6 rounded-2xl shadow-sm hover:border-brand-border/80 transition-all flex items-start gap-4"
-              id="kpi-shrinkage-rate"
+              id="kpi-service-pipeline"
             >
-              <div className="p-3 bg-green-500/10 text-green-500 rounded-xl">
-                <ShieldCheck size={24} />
+              <div className="p-3 bg-brand-gold/10 text-brand-gold rounded-xl">
+                <ClipboardList size={24} />
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-bold text-text-secondary uppercase tracking-wider font-sans">Audit Variance / Shrinkage</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-3xl font-extrabold text-green-500 font-mono">0.00%</p>
-                </div>
-                <p className="text-xs text-green-500 font-medium">Perfect Stock Alignment (Baseline)</p>
+                <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Active Service Log Actions</p>
+                <p className="text-3xl font-extrabold text-brand-gold font-mono">{serviceLogs.length}</p>
+                <p className="text-xs text-text-secondary">
+                  {selectedRegion === 'ALL' ? 'SCL tickets across SA' : `Pending logs tracking in ${selectedRegion}`}
+                </p>
               </div>
             </motion.div>
+          </div>
+
+          {/* Graphical Intelligence Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            {/* Chart 1: Stock Availability */}
+            <div className="bg-bg-elevated border border-brand-border p-6 rounded-2xl shadow-sm space-y-4" id="chart-parts-volume">
+              <div>
+                <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+                  <Package size={16} className="text-brand-gold" />
+                  Available Volume by SKU ({selectedRegion === 'ALL' ? 'National' : selectedRegion})
+                </h3>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Calculated units holding per active parts item
+                </p>
+              </div>
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={stockItems.slice(0, 8).map(item => ({
+                      name: getItemName(item).substring(0, 15) + (getItemName(item).length > 15 ? '...' : ''),
+                      'Units': getCalculatedTotalUnits(item)
+                    }))}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }} />
+                    <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-brand-border)', borderRadius: '12px' }}
+                      labelStyle={{ color: 'var(--color-text-primary)', fontWeight: 'bold' }}
+                    />
+                    {/* Primary Dallmayr Brand Color: brand-gold (#C5A059) */}
+                    <Bar dataKey="Units" fill="#C5A059" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Chart 2: Regional Spread or Pipeline Density */}
+            <div className="bg-bg-elevated border border-brand-border p-6 rounded-2xl shadow-sm space-y-4" id="chart-scl-spread">
+              <div>
+                <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+                  <ClipboardList size={16} className="text-brand-gold" />
+                  {selectedRegion === 'ALL' ? 'Operations Task Spread' : `${selectedRegion} Incidents Workflow Density`}
+                </h3>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  {selectedRegion === 'ALL' ? 'Direct dispatches comparison' : 'SCL ticket status ratios'}
+                </p>
+              </div>
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  {selectedRegion === 'ALL' ? (
+                    <BarChart
+                      data={[
+                        { name: 'Johannesburg', 'Tasks count': serviceLogs.filter(l => {
+                          const cust = customers.find(c => c.id === l.customer_id);
+                          return cust?.region?.toUpperCase() === 'JHB' || (l.doc_no || l.do_number || '').startsWith('CA21');
+                        }).length },
+                        { name: 'Durban (KZN)', 'Tasks count': serviceLogs.filter(l => {
+                          const cust = customers.find(c => c.id === l.customer_id);
+                          return cust?.region?.toUpperCase() === 'KZN' || (l.doc_no || l.do_number || '').startsWith('CA41');
+                        }).length },
+                        { name: 'Cape Town', 'Tasks count': serviceLogs.filter(l => {
+                          const cust = customers.find(c => c.id === l.customer_id);
+                          return cust?.region?.toUpperCase() === 'CPT' || (l.doc_no || l.do_number || '').startsWith('CA31');
+                        }).length }
+                      ]}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }} />
+                      <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-brand-border)', borderRadius: '12px' }}
+                        labelStyle={{ color: 'var(--color-text-primary)', fontWeight: 'bold' }}
+                      />
+                      {/* Uses standard Dallmayr branding colors */}
+                      <Bar dataKey="Tasks count" fill="#C5A059" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  ) : (
+                    <AreaChart
+                      data={[
+                        { name: 'Open Calls', 'Active Logs': serviceLogs.filter(l => l.status === 'Open').length },
+                        { name: 'In Progress', 'Active Logs': serviceLogs.filter(l => l.status === 'In Progress' || l.status === 'In-Progress').length },
+                        { name: 'Closed Calls', 'Active Logs': serviceLogs.filter(l => l.status === 'Closed').length }
+                      ]}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+                    >
+                      <defs>
+                        <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#C5A059" stopOpacity={0.4}/>
+                          <stop offset="95%" stopColor="#C5A059" stopOpacity={0.0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }} />
+                      <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-brand-border)', borderRadius: '12px' }}
+                        labelStyle={{ color: 'var(--color-text-primary)', fontWeight: 'bold' }}
+                      />
+                      <Area type="monotone" dataKey="Active Logs" stroke="#C5A059" strokeWidth={3} fillOpacity={1} fill="url(#colorActive)" />
+                    </AreaChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Chart 3: Closed Service Calls Analysis (Trend) */}
+          <div className="bg-bg-elevated border border-brand-border p-6 rounded-2xl shadow-sm space-y-4" id="chart-closedScl-timeline">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-brand-gold" />
+                  Closed Service Calls Clearance Velocity Trend ({selectedRegion === 'ALL' ? 'National' : selectedRegion})
+                </h3>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Plots dispatches successfully closed over time using database-cleansed ledger entries
+                </p>
+              </div>
+              <div className="text-xs font-mono bg-bg-base/60 text-brand-gold px-2.5 py-1 rounded-md border border-brand-gold/20">
+                Trigger-Sanitized: date_created & date_closed
+              </div>
+            </div>
+            
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={timelineData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
+                >
+                  <defs>
+                    <linearGradient id="colorClosedCount" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#C5A059" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="#C5A059" stopOpacity={0.0}/>
+                    </linearGradient>
+                    <linearGradient id="colorJHB" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0}/>
+                    </linearGradient>
+                    <linearGradient id="colorKZN" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0}/>
+                    </linearGradient>
+                    <linearGradient id="colorCPT" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="date" tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }} />
+                  <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 10 }} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-brand-border)', borderRadius: '12px' }}
+                    labelStyle={{ color: 'var(--color-text-primary)', fontWeight: 'bold' }}
+                  />
+                  {selectedRegion === 'ALL' ? (
+                    <>
+                      <Area type="monotone" name="Johannesburg (JHB)" dataKey="JHB" stroke="#3b82f6" strokeWidth={2} fill="url(#colorJHB)" />
+                      <Area type="monotone" name="Durban (KZN)" dataKey="KZN" stroke="#10b981" strokeWidth={2} fill="url(#colorKZN)" />
+                      <Area type="monotone" name="Cape Town (CPT)" dataKey="CPT" stroke="#8b5cf6" strokeWidth={2} fill="url(#colorCPT)" />
+                    </>
+                  ) : (
+                    <Area 
+                      type="monotone" 
+                      name={`${selectedRegion} Closed Tasks`} 
+                      dataKey={selectedRegion} 
+                      stroke="#C5A059" 
+                      strokeWidth={3} 
+                      fill="url(#colorClosedCount)" 
+                    />
+                  )}
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -233,7 +503,7 @@ export function AnalyticsPage() {
                   <div>
                     <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
                       <LayoutGrid size={20} className="text-brand-gold" />
-                      Part Movement Velocity (Stock Turnover)
+                      Part Movement Velocity ({selectedRegion === 'ALL' ? 'National' : selectedRegion})
                     </h2>
                     <p className="text-xs text-text-secondary mt-0.5">
                       Units evaluated via: Pallets (×48 × Units/Box) + Boxes (× Units/Box)

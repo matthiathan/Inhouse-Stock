@@ -2,18 +2,39 @@
 @import "tailwindcss";
 
 @theme {
+  /* Dallmayr South Africa Corporate Palette */
+  --color-dallmayr-blue: #061B30;
+  --color-dallmayr-blue-light: #0D2E4E;
+  --color-dallmayr-blue-dark: #030C16;
+  --color-dallmayr-gold: #C5A059;
+  --color-dallmayr-gold-light: #DFBF7D;
+  --color-dallmayr-gold-dark: #A17D3A;
+  --color-dallmayr-cream: #FAF6F0;
+  --color-dallmayr-cream-light: #FDFBF7;
+
+  /* Theme semantic maps */
   --color-brand-gold: #C5A059;
   --color-brand-border: #E5E7EB;
-  --color-bg-base: #F9FAFB;
+  --color-bg-base: #FAF9F6;
   --color-bg-elevated: #FFFFFF;
-  --color-text-primary: #111827;
-  --color-text-secondary: #6B7280;
+  --color-text-primary: #061B30;
+  --color-text-secondary: #5C6E82;
 }
 
 .dark {
-  --color-brand-border: #374151;
-  --color-bg-base: #111827;
-  --color-bg-elevated: #1F2937;
-  --color-text-primary: #F9FAFB;
-  --color-text-secondary: #9CA3AF;
+  --color-brand-gold: #DFBF7D;
+  --color-brand-border: #142F4B;
+  --color-bg-base: #061B30;
+  --color-bg-elevated: #0B243B;
+  --color-text-primary: #FAF6F0;
+  --color-text-secondary: #8EACC4;
 }
+
+/* Custom class override for SVG logo text dynamic color */
+.dark-fill-override {
+  fill: #061B30;
+}
+.dark .dark-fill-override {
+  fill: #FAF6F0;
+}
+

@@ -1,6 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
-  ShieldCheck,
   Sun,
   Moon,
   LogOut,
@@ -12,6 +11,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'sonner';
 import { ALL_NAV_ITEMS } from '../../constants/navigation';
+// @ts-ignore
+import DallmayrLogo from '@/assets/dallmayr_logo.svg';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -62,19 +63,30 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
   return (
     <aside 
-      className={`hidden md:flex fixed left-0 top-0 h-screen bg-white dark:bg-[#111111] border-r border-gray-200 dark:border-gray-800 flex-col z-40 transition-all duration-300 ease-in-out ${
+      className={`hidden md:flex fixed left-0 top-0 h-screen bg-bg-elevated border-r border-brand-border flex-col z-40 transition-all duration-300 ease-in-out ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
       {/* Header */}
-      <div className={`flex items-center h-16 border-b border-gray-200 dark:border-gray-800 ${isCollapsed ? 'justify-center px-0' : 'justify-between px-6'}`}>
-        <div className="flex items-center gap-3 overflow-hidden">
-          <ShieldCheck className="text-gray-900 dark:text-white shrink-0" size={24} />
-          {!isCollapsed && (
-            <div className="flex flex-col whitespace-nowrap opacity-100 transition-opacity duration-300">
-              <h1 className="font-black text-sm text-gray-900 dark:text-white leading-tight tracking-tight">DALLMAYR</h1>
-              <p className="text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 font-bold">Portal</p>
+      <div className={`flex items-center h-16 border-b border-brand-border ${isCollapsed ? 'justify-center px-0' : 'justify-between px-6'}`}>
+        <div className="flex items-center gap-3 overflow-hidden w-full justify-center">
+          {isCollapsed ? (
+            /* Royal Crest crop on Collapsed Side */
+            <div className="w-10 h-10 overflow-hidden relative flex items-center justify-center shrink-0">
+              <img 
+                src={DallmayrLogo} 
+                className="max-w-none h-10 absolute left-0" 
+                style={{ left: '-2.5px' }}
+                alt="Dallmayr Crest" 
+              />
             </div>
+          ) : (
+            /* Full Premium Dallmayr South Africa Identity Logo */
+            <img 
+              src={DallmayrLogo} 
+              className="h-10 w-auto max-w-full object-contain filter drop-shadow-sm transition-all duration-300"
+              alt="Dallmayr South Africa" 
+            />
           )}
         </div>
       </div>
@@ -82,7 +94,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       {/* Toggle Button */}
       <button 
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3 top-20 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-full p-1 text-gray-400 hover:text-gray-900 dark:hover:text-white z-50 hover:scale-110 shadow-sm transition-all"
+        className="absolute -right-3 top-20 bg-bg-elevated border border-brand-border rounded-full p-1 text-text-secondary hover:text-brand-gold z-50 hover:scale-110 shadow-md transition-all"
         title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
       >
         {isCollapsed ? <ChevronRight size={14} strokeWidth={3} /> : <ChevronLeft size={14} strokeWidth={3} />}
@@ -98,8 +110,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group overflow-hidden ${
                 isActive
-                  ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900 shadow-md'
-                  : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'
+                  ? 'bg-dallmayr-blue text-dallmayr-gold-light dark:bg-dallmayr-gold dark:text-dallmayr-blue font-bold shadow-md'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-dallmayr-blue/5 dark:hover:bg-dallmayr-gold/5'
               } ${isCollapsed ? 'justify-center' : 'justify-start'}`
             }
           >
@@ -118,17 +130,17 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       </nav>
 
       {/* Footer / Pinned User Section */}
-      <div className={`p-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02] flex flex-col gap-4 ${isCollapsed ? 'items-center' : ''}`}>
+      <div className={`p-4 border-t border-brand-border bg-dallmayr-blue/[0.02] dark:bg-dallmayr-gold/[0.01] flex flex-col gap-4 ${isCollapsed ? 'items-center' : ''}`}>
         
         {/* User Info */}
         <div className={`flex items-center gap-3 ${isCollapsed ? 'justify-center' : ''}`}>
-          <div className="w-10 h-10 shrink-0 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center text-gray-700 dark:text-gray-300 font-bold uppercase overflow-hidden">
+          <div className="w-10 h-10 shrink-0 shadow-sm border border-brand-border rounded-xl bg-bg-elevated flex items-center justify-center text-text-primary font-bold uppercase overflow-hidden">
             {user?.email?.charAt(0) || <UserIcon size={18} />}
           </div>
           
           {!isCollapsed && (
             <div className="flex-1 min-w-0 overflow-hidden">
-              <p className="text-xs font-black text-gray-900 dark:text-white truncate" title={user?.email || 'User'}>
+              <p className="text-xs font-black text-text-primary truncate" title={user?.email || 'User'}>
                 {user?.email || 'User'}
               </p>
               <div className={`mt-0.5 inline-flex text-[9px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded-md ${getRoleBadgeColor(userRole)}`}>
@@ -139,11 +151,11 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         </div>
         
         {/* Actions Menu */}
-        <div className={`flex items-center ${isCollapsed ? 'flex-col gap-3' : 'justify-between pt-2 border-t border-gray-200/50 dark:border-gray-800/50'}`}>
+        <div className={`flex items-center ${isCollapsed ? 'flex-col gap-3' : 'justify-between pt-2 border-t border-brand-border'}`}>
           <button 
             onClick={() => setIsDark(!isDark)}
             title="Toggle Theme"
-            className={`p-2 rounded-lg text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all ${isCollapsed ? 'w-full flex justify-center' : ''}`}
+            className={`p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-dallmayr-blue/5 dark:hover:bg-dallmayr-gold/5 transition-all ${isCollapsed ? 'w-full flex justify-center' : ''}`}
           >
             {isDark ? <Sun size={16} strokeWidth={2.5} /> : <Moon size={16} strokeWidth={2.5} />}
           </button>
@@ -151,7 +163,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
           <button 
             onClick={handleLogout} 
             title="Log Out"
-            className={`flex items-center gap-2 rounded-lg text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all ${
+            className={`flex items-center gap-2 rounded-lg text-text-secondary hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all ${
               isCollapsed ? 'p-2 w-full justify-center' : 'px-3 py-2 text-xs font-bold'
             }`}
           >

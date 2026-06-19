@@ -1,7 +1,28 @@
+import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { X, ShieldCheck, User as UserIcon, LogOut, Sun, Moon } from 'lucide-react';
+import { X, User as UserIcon, LogOut, Sun, Moon } from 'lucide-react';
+import { User, AppRole } from '../../types';
+// @ts-ignore
+import DallmayrLogo from '@/assets/dallmayr_logo.svg';
 
-export default function MobileDrawer({ isOpen, onClose, navItems, user, role, isDark, toggleTheme, onLogout }: any) {
+export interface MobileDrawerNavItem {
+  name: string;
+  path: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+}
+
+export interface MobileDrawerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  navItems: MobileDrawerNavItem[];
+  user: User | null;
+  role: AppRole | null;
+  isDark: boolean;
+  toggleTheme: () => void;
+  onLogout: () => void;
+}
+
+export default function MobileDrawer({ isOpen, onClose, navItems, user, role, isDark, toggleTheme, onLogout }: MobileDrawerProps) {
   if (!isOpen) return null;
 
   const getRoleBadgeColor = (r: string) => {
@@ -17,22 +38,22 @@ export default function MobileDrawer({ isOpen, onClose, navItems, user, role, is
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-white dark:bg-[#111111] flex flex-col md:hidden transition-colors duration-300">
-      <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800">
+    <div className="fixed inset-0 z-[100] bg-bg-elevated flex flex-col md:hidden transition-colors duration-300">
+      <div className="p-4 flex items-center justify-between border-b border-brand-border">
         <div className="flex items-center gap-3">
-          <ShieldCheck className="text-gray-900 dark:text-white" size={24} />
-          <div>
-            <h1 className="font-black text-sm text-gray-900 dark:text-white leading-tight tracking-tight">DALLMAYR</h1>
-            <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Portal</p>
-          </div>
+          <img 
+            src={DallmayrLogo} 
+            className="h-10 w-auto filter drop-shadow-xs" 
+            alt="Dallmayr South Africa" 
+          />
         </div>
-        <button onClick={onClose} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg">
+        <button onClick={onClose} className="p-2 text-text-secondary hover:bg-dallmayr-blue/5 dark:hover:bg-dallmayr-gold/5 rounded-lg">
           <X size={24} />
         </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4 space-y-1.5 scrollbar-hide">
-        {navItems.map((item: any) => (
+        {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
@@ -40,8 +61,8 @@ export default function MobileDrawer({ isOpen, onClose, navItems, user, role, is
             className={({ isActive }) =>
               `flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-200 group ${
                 isActive
-                  ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900 shadow-md'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'
+                  ? 'bg-dallmayr-blue text-dallmayr-gold-light dark:bg-dallmayr-gold dark:text-dallmayr-blue shadow-md font-bold'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-dallmayr-blue/5 dark:hover:bg-dallmayr-gold/5'
               }`
             }
           >
@@ -57,13 +78,13 @@ export default function MobileDrawer({ isOpen, onClose, navItems, user, role, is
         ))}
       </nav>
 
-      <div className="p-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.02] space-y-4 pb-safe-8">
+      <div className="p-4 border-t border-brand-border bg-dallmayr-blue/[0.02] dark:bg-dallmayr-gold/[0.01] space-y-4 pb-safe-8">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 shrink-0 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 flex items-center justify-center text-gray-700 dark:text-gray-300 font-bold uppercase overflow-hidden">
+          <div className="w-10 h-10 shrink-0 shadow-sm border border-brand-border rounded-xl bg-bg-elevated flex items-center justify-center text-text-primary font-bold uppercase overflow-hidden">
             {user?.email?.charAt(0) || <UserIcon size={18} />}
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
-            <p className="text-sm font-black text-gray-900 dark:text-white truncate">
+            <p className="text-sm font-black text-text-primary truncate">
               {user?.email || 'User'}
             </p>
             <div className={`mt-1 inline-flex text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded-md ${getRoleBadgeColor(role || 'user')}`}>
@@ -72,11 +93,11 @@ export default function MobileDrawer({ isOpen, onClose, navItems, user, role, is
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-800/50">
-           <button onClick={toggleTheme} className="p-3 text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 rounded-xl transition-all">
+        <div className="flex items-center justify-between pt-2 border-t border-brand-border">
+           <button onClick={toggleTheme} className="p-3 text-text-secondary hover:text-text-primary hover:bg-dallmayr-blue/5 dark:hover:bg-dallmayr-gold/5 rounded-xl transition-all">
             {isDark ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          <button onClick={onLogout} className="flex items-center gap-2 px-4 py-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-500/10 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-all font-bold">
+          <button onClick={onLogout} className="flex items-center gap-2 px-4 py-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-500/10 text-text-secondary hover:text-red-650 transition-all font-bold">
             <LogOut size={20} /> Logout
           </button>
         </div>

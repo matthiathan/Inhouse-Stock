@@ -71,3 +71,34 @@ export const serviceCallLogSchema = z.object({
 });
 
 export type ServiceCallLogSchemaValue = z.infer<typeof serviceCallLogSchema>;
+
+// Database schema definitions for repository writes
+export const dbOrderSchema = z.object({
+  order_number: z.string().min(1, "Order number is required"),
+  delivery_date: z.string().min(1, "Delivery date is required"),
+  status: z.enum(['Pending', 'Fulfilled', 'Cancelled']).default('Pending')
+});
+
+export type DbOrderSchemaValue = z.infer<typeof dbOrderSchema>;
+
+export const dbOrderItemSchema = z.object({
+  order_id: z.string().uuid("Invalid order ID format").or(z.string().min(1, "Order ID is required")),
+  stock_barcode: z.string().min(1, "Stock barcode is required"),
+  item_name: z.string().min(1, "Item name is required"),
+  required_quantity: z.number().min(0, "Required quantity must be 0 or greater"),
+  scanned_quantity: z.number().min(0, "Scanned quantity must be 0 or greater").default(0),
+  is_fulfilled: z.boolean().default(false)
+});
+
+export type DbOrderItemSchemaValue = z.infer<typeof dbOrderItemSchema>;
+
+// Custom validation error class for repository operations
+export class RepositoryValidationError extends Error {
+  public details?: any;
+  constructor(message: string, details?: any) {
+    super(message);
+    this.name = 'RepositoryValidationError';
+    this.details = details;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}

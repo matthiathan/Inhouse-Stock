@@ -24,7 +24,8 @@ export default function BarcodeScanner({
   
   // Directly manage scanner lifecycle with a ref for useTorch compatibility
   const scannerInstanceRef = useRef<Html5Qrcode | null>(null);
-  const { torchOn, toggleTorch, isSupported, checkSupport } = useTorch(scannerInstanceRef);
+  const { torchOn, toggleTorch, isSupported, checkSupport, cleanupTorch } = useTorch(scannerInstanceRef);
+  const lastVibrateRef = useRef<number>(0);
 
   // Stabilize callbacks using the mutable ref pattern to keep the effect dependency-free
   const onScanRef = useRef(onScan);
@@ -69,8 +70,23 @@ export default function BarcodeScanner({
               onScanRef.current(decodedText);
             }
           },
-          () => {
-            // Success handler for scan errors (ignore)
+          (errorMessage) => {
+            if (!isMounted) return;
+
+            // Handle scan failure with optimized haptic feedback
+            const isSilentError = !errorMessage || 
+              errorMessage.includes('NotFoundException') || 
+              errorMessage.includes('No MultiFormat Reader') || 
+              errorMessage.includes('No barcode format');
+
+            if (!isSilentError && typeof navigator !== 'undefined' && navigator.vibrate) {
+              const now = Date.now();
+              // Throttle to once every 1.5s to prevent freezing or motor burnout on rapid frames
+              if (now - lastVibrateRef.current > 1500) {
+                navigator.vibrate([100, 50, 100]); // Dual pulsation haptic feedback signal for a failed scan attempt
+                lastVibrateRef.current = now;
+              }
+            }
           }
         );
 
@@ -83,9 +99,10 @@ export default function BarcodeScanner({
             }
           }, 1000);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (isMounted) {
-          setHasError(err.message || "Failed to start camera");
+          const message = err instanceof Error ? err.message : String(err);
+          setHasError(message || "Failed to start camera");
           setIsInitializing(false);
         }
       }
@@ -95,6 +112,10 @@ export default function BarcodeScanner({
 
     return () => {
       isMounted = false;
+
+      // Unmount cleanup: immediately turn off physical flash/torch if active to prevent hardware lock
+      cleanupTorch();
+
       const currentScanner = scannerInstanceRef.current;
       if (currentScanner) {
         scannerInstanceRef.current = null; // Instantly nullify key ref
@@ -117,7 +138,7 @@ export default function BarcodeScanner({
         }
       }
     };
-  }, []);
+  }, [cleanupTorch]);
 
   return (
     <motion.div 

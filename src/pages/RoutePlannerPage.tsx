@@ -129,7 +129,8 @@ export function RoutePlannerPage() {
     const validation = validateSclTransition(
       selectedScl.status || 'Open',
       targetStatus,
-      remarksInput
+      remarksInput,
+      role || undefined
     );
 
     if (!validation.valid) {

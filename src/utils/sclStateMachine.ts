@@ -2,15 +2,16 @@ import { supabase } from '../lib/supabase';
 
 export type SclStatus = 'Open' | 'In Progress' | 'Closed';
 
-export const VALID_SCL_TRANSITIONS: Record<SclStatus, SclStatus[]> = {
-  'Open': ['In Progress', 'Closed'],
+export const VALID_SCL_TRANSITIONS: Record<SclStatus | 'Assigned', SclStatus[]> = {
+  'Open': ['In Progress'],
+  'Assigned': ['In Progress'],
   'In Progress': ['Open', 'Closed'],
   'Closed': ['Open', 'In Progress'] // Manager can re-open
 };
 
 export interface AuditLogEntry {
   scl_id: string;
-  previous_status: SclStatus | 'None';
+  previous_status: SclStatus | 'Assigned' | 'None';
   new_status: SclStatus;
   changed_by: string;
   notes?: string;
@@ -22,27 +23,47 @@ export interface AuditLogEntry {
  * Throws an error if the transition is invalid, lacks mandatory remarks, or violates role permissions.
  */
 export const validateSclTransition = (
-  currentStatus: SclStatus,
-  nextStatus: SclStatus,
+  currentStatus: string,
+  nextStatus: string,
   closedRemarks: string | null,
   userRole?: string
 ): { valid: boolean; error?: string } => {
+  const normCurrent = currentStatus as SclStatus | 'Assigned';
+  const normNext = nextStatus as SclStatus;
+
   // If no change, it is valid
-  if (currentStatus === nextStatus) {
+  if (normCurrent === normNext) {
     return { valid: true };
   }
 
-  // Check valid transition path
-  const allowed = VALID_SCL_TRANSITIONS[currentStatus] || [];
-  if (!allowed.includes(nextStatus)) {
+  const isTech = !userRole || !['admin', 'ops_manager'].includes(userRole);
+
+  // Add validation layer that logs an error to the console if a technician attempts to jump states
+  if (isTech && (normCurrent === 'Open' || normCurrent === 'Assigned') && normNext === 'Closed') {
+    const errorMsg = `CRITICAL STATE TRANSITION ERROR: Technician (role: ${userRole || 'tech'}) attempted to jump states from '${normCurrent}' directly to '${normNext}' without completing 'In Progress' first.`;
+    console.error(errorMsg);
     return {
       valid: false,
-      error: `Invalid transition path: ${currentStatus} cannot directly transition to ${nextStatus}.`
+      error: `State violation: Technician cannot transition directly from '${normCurrent}' to 'Closed' without completing 'In Progress' first.`
     };
   }
 
+  // Check valid transition path
+  const allowed = VALID_SCL_TRANSITIONS[normCurrent] || [];
+  if (!allowed.includes(normNext)) {
+    const isAdmin = userRole && ['admin', 'ops_manager'].includes(userRole);
+    if (!isAdmin) {
+      const errorMsg = `CRITICAL STATE TRANSITION ERROR: Invalid status transition from '${normCurrent}' to '${normNext}'.`;
+      console.error(errorMsg);
+      return {
+        valid: false,
+        error: `Invalid transition path: ${currentStatus} cannot directly transition to ${nextStatus}.`
+      };
+    }
+  }
+
   // Role validation for reopening from Closed
-  if (currentStatus === 'Closed' && userRole && !['admin', 'ops_manager'].includes(userRole)) {
+  if (normCurrent === 'Closed' && isTech) {
     return {
       valid: false,
       error: 'Only administrators or operations managers are authorized to re-open a closed service call.'
@@ -50,7 +71,7 @@ export const validateSclTransition = (
   }
 
   // Enforce mandatory closed remarks when closing
-  if (nextStatus === 'Closed' && (!closedRemarks || closedRemarks.trim().length === 0)) {
+  if (normNext === 'Closed' && (!closedRemarks || closedRemarks.trim().length === 0)) {
     return {
       valid: false,
       error: 'An asset cannot go to Closed status without mandatory closed remarks.'

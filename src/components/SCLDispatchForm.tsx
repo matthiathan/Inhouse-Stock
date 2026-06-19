@@ -18,8 +18,16 @@ import {
   approveDefectiveAsset, 
   logStateTransition 
 } from '../utils/sclStateMachine';
+import { User, Machine } from '../types';
 
-const EMPTY_ARRAY: any[] = [];
+interface SCLCustomer {
+  id: string;
+  name: string;
+  code: string;
+  address: string;
+}
+
+const EMPTY_ARRAY: SCLCustomer[] = [];
 
 export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
   const [region, setRegion] = useState<'KZN' | 'JHB' | 'CPT'>('KZN');
@@ -45,9 +53,9 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
     setValue('qrcode', '');
   };
 
-  const [techs, setTechs] = useState<any[]>([]);
-  const [machines, setMachines] = useState<any[]>([]);
-  const [filteredMachines, setFilteredMachines] = useState<any[]>([]);
+  const [techs, setTechs] = useState<User[]>([]);
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [filteredMachines, setFilteredMachines] = useState<Machine[]>([]);
   const [predictiveAlert, setPredictiveAlert] = useState<string | null>(null);
   const [isBlocked, setIsBlocked] = useState<boolean>(false);
   const [activeSerial, setActiveSerial] = useState<string>('');
@@ -86,8 +94,9 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
 
       if (tData) setTechs(tData);
       if (mData) setMachines(mData);
-    } catch (err: any) {
-      toast.error('Failed to load auxiliary dispatch data: ' + err.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error('Failed to load auxiliary dispatch data: ' + message);
     }
   };
 
@@ -261,7 +270,7 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
 
         onSuccess?.();
       },
-      onError: (err: any) => {
+      onError: (err: Error) => {
         if (err.message === 'OFFLINE_SAVED') {
            // handled by hook toast
            onSuccess?.(); // Close modal anyway since it's saved offline

@@ -57,6 +57,26 @@ export const useTorch = (scannerRef?: MutableRefObject<Html5Qrcode | null>) => {
     }
   }, [torchOn, scannerRef]);
 
-  return { torchOn, setTorchOn, toggleTorch, error, isSupported, checkSupport };
+  const cleanupTorch = useCallback(async () => {
+    try {
+      setTorchOn(false);
+      if (scannerRef && scannerRef.current) {
+        const track = scannerRef.current.getRunningTrack();
+        if (track) {
+          const capabilities = track.getCapabilities ? track.getCapabilities() : null;
+          // @ts-ignore - 'torch' is part of the MediaTrackCapabilities interface
+          if (capabilities && capabilities.torch) {
+            await track.applyConstraints({
+              advanced: [{ torch: false }] as any
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Error resetting torch state during unmount:", err);
+    }
+  }, [scannerRef]);
+
+  return { torchOn, setTorchOn, toggleTorch, error, isSupported, checkSupport, cleanupTorch };
 };
 

@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" width="100%" height="100%">
+  <!-- Definitions for Reusable Gradients & Elements -->
+  <defs>
+    <!-- Rich Metallic Gold Gradient -->
+    <linearGradient id="dallmayrGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E2C993" />
+      <stop offset="35%" stop-color="#C5A059" />
+      <stop offset="70%" stop-color="#A57F3C" />
+      <stop offset="100%" stop-color="#CCA053" />
+    </linearGradient>
+    
+    <!-- Sophisticated Brand Blue Shadow/Filter -->
+    <filter id="gentleShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.12" />
+    </filter>
+  </defs>
+
+  <!-- Crown / Royal Crest Emblem Group -->
+  <g transform="translate(10, 10)" filter="url(#gentleShadow)">
+    <!-- Base Arch and Jewel Holders -->
+    <path d="M 30,85 C 30,85 50,88 70,85 C 90,82 100,85 100,85 L 100,80 C 100,80 90,77 70,80 C 50,83 30,80 30,80 Z" fill="url(#dallmayrGold)" />
+    <!-- Velvet Cap Interior (Royal Red/Burgundy) -->
+    <path d="M 36,80 C 36,55 52,44 65,42 C 78,44 94,55 94,80 Z" fill="#4E0C11" opacity="0.9" />
+    
+    <!-- Crown Arches & Spires -->
+    <path d="M 36,80 C 35,62 48,50 65,42 L 65,80 Z" fill="none" stroke="url(#dallmayrGold)" stroke-width="2.5" />
+    <path d="M 94,80 C 95,62 82,50 65,42 L 65,80 Z" fill="none" stroke="url(#dallmayrGold)" stroke-width="2.5" />
+    <path d="M 45,82 C 45,68 53,58 65,42" fill="none" stroke="url(#dallmayrGold)" stroke-width="2" />
+    <path d="M 85,82 C 85,68 77,58 65,42" fill="none" stroke="url(#dallmayrGold)" stroke-width="2" />
+    
+    <!-- Central Scepter Orb & Cross -->
+    <circle cx="65" cy="30" r="4.5" fill="url(#dallmayrGold)" />
+    <path d="M 65,22 L 65,28 M 62,25 L 68,25" stroke="url(#dallmayrGold)" stroke-width="1.8" stroke-linecap="round" />
+    
+    <!-- Jewels on the Base Band -->
+    <circle cx="40" cy="82.5" r="1.5" fill="#FAF6F0" />
+    <circle cx="50" cy="83" r="1.5" fill="#0D233A" />
+    <circle cx="60" cy="83.2" r="1.5" fill="#A57F3C" />
+    <circle cx="70" cy="83" r="1.5" fill="#FAF6F0" />
+    <circle cx="80" cy="82.5" r="1.5" fill="#0D233A" />
+    <circle cx="90" cy="82" r="1.5" fill="#FAF6F0" />
+
+    <!-- Left & Right Royal Shield Supporters (Flourishes) -->
+    <path d="M 30,83 C 24,80 18,70 18,58 C 18,48 24,38 31,43 C 25,48 24,58 28,68 Z" fill="url(#dallmayrGold)" />
+    <path d="M 100,83 C 106,80 112,70 112,58 C 112,48 106,38 99,43 C 105,48 106,58 102,68 Z" fill="url(#dallmayrGold)" />
+  </g>
+
+  <!-- Typography Group (Wordmark & Subtitle) -->
+  <!-- "Dallmayr" written in a luxurious high-prestige serif style -->
+  <g transform="translate(136, 12)" filter="url(#gentleShadow)">
+    <text x="0" y="58" 
+          font-family="Georgia, 'Times New Roman', Playfair Display, serif" 
+          font-size="44" 
+          font-weight="800" 
+          letter-spacing="1.5" 
+          fill="#FAF6F0" 
+          class="dark-fill-override">Dallmayr</text>
+          
+    <!-- Decorative Gold Divider Line -->
+    <line x1="2" y1="72" x2="238" y2="72" stroke="url(#dallmayrGold)" stroke-width="2" stroke-linecap="round" />
+    <circle cx="120" cy="72" r="3" fill="url(#dallmayrGold)" />
+
+    <!-- "SOUTH AFRICA" Subheading in ultra-spaced high-prestige modern sans-serif -->
+    <text x="3" y="93" 
+          font-family="'Inter', 'Space Grotesk', system-ui, sans-serif" 
+          font-size="12.5" 
+          font-weight="900" 
+          letter-spacing="5.5" 
+          fill="#C5A059">SOUTH AFRICA</text>
+  </g>
+</svg>
