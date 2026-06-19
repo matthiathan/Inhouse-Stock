@@ -14,8 +14,16 @@ export const getGhostBillingAudit = async (minimumDays: number = 60) => {
 export const getServiceBillingReport = async () => {
   const { data, error } = await supabase
     .from('finance_billing_report')
-    .select('*')
-    .order('date_closed', { ascending: false });
+    .select(`
+      region,
+      "Customer Code",
+      "Client Name",
+      "Date",
+      "Closed Date",
+      "CURRENT STATUS",
+      billing_fee
+    `)
+    .order('Closed Date', { ascending: false });
 
   if (error) throw error;
   return data;

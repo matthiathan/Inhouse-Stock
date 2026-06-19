@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Camera, CheckCircle, Package, ArrowLeft, RefreshCw, Barcode as BarcodeIcon, Play } from 'lucide-react';
-import { useScanner } from '../hooks/useScanner';
+import { CheckCircle, Package, ArrowLeft, RefreshCw, Barcode as BarcodeIcon, Play, QrCode } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
+import BarcodeScanner from './BarcodeScanner';
 
 interface OrderItem {
   id: string;
@@ -55,7 +55,7 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
   // 2. Progressive Picking Logic
   const handleScanSuccess = (decodedText: string) => {
     setItems(prevItems => {
-      const itemIndex = prevItems.findIndex(i => i.stock_barcode === decodedText);
+      const itemIndex = prevItems.findIndex(i => i.stock_barcode.trim().toLowerCase() === decodedText.trim().toLowerCase());
       
       if (itemIndex === -1) {
         toast.error(`Item ${decodedText} not found in this order`);
@@ -69,11 +69,6 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
         return prevItems;
       }
 
-      // Vibrate on success
-      if (navigator.vibrate) {
-        navigator.vibrate(100);
-      }
-
       const newItems = [...prevItems];
       newItems[itemIndex] = {
         ...item,
@@ -83,16 +78,7 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
       toast.success(`Picked: ${item.item_name}`);
       return newItems;
     });
-
-    // Don't auto-close scanner, allow bulk picking
   };
-
-  // Static scanner ID
-  useScanner('fulfillment-scanner', handleScanSuccess, {
-    fps: 10,
-    qrbox: { width: 250, height: 250 },
-    aspectRatio: 1.0,
-  }, isScanning);
 
   // 3. Stats & Progress
   const totalRequired = useMemo(() => items.reduce((acc, i) => acc + i.required_quantity, 0), [items]);
@@ -231,34 +217,12 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
       {/* 3. SCANNER POPUP */}
       <AnimatePresence>
         {isScanning && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] bg-black"
-          >
-            <div className="absolute top-4 right-4 z-[70]">
-              <button 
-                onClick={() => setIsScanning(false)}
-                className="bg-white/20 p-3 rounded-full text-white backdrop-blur-xl border border-white/30"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
-              <div className="w-full max-w-sm aspect-square bg-gray-900 rounded-3xl overflow-hidden shadow-2xl relative border-4 border-brand-gold/30">
-                <div id="fulfillment-scanner" className="w-full h-full" />
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                   <div className="w-48 h-48 border-2 border-brand-gold rounded-2xl animate-pulse" />
-                </div>
-              </div>
-              <div className="mt-8">
-                <p className="text-white font-bold text-xl">Center the Barcode</p>
-                <p className="text-white/60 mt-2">Vibration confirms selection</p>
-              </div>
-            </div>
-          </motion.div>
+          <BarcodeScanner 
+            onScan={handleScanSuccess}
+            onClose={() => setIsScanning(false)}
+            title="Pick Items"
+            description="Scan item barcodes to pick them from stock"
+          />
         )}
       </AnimatePresence>
 
@@ -268,7 +232,7 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
           onClick={() => setIsScanning(true)}
           className="flex-1 bg-brand-gold text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"
         >
-          <Camera className="w-5 h-5" />
+          <QrCode className="w-5 h-5" />
           Scan Item
         </button>
 

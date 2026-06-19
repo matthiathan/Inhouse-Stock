@@ -32,8 +32,8 @@ export default function ServiceBillingReport() {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(item => 
-        item.client_name?.toLowerCase().includes(q) || 
-        item.customer_code?.toLowerCase().includes(q)
+        item["Client Name"]?.toLowerCase().includes(q) || 
+        item["Customer Code"]?.toLowerCase().includes(q)
       );
     }
 
@@ -44,13 +44,13 @@ export default function ServiceBillingReport() {
 
     // Status filter
     if (statusFilter !== 'All') {
-      result = result.filter(item => item.status === statusFilter);
+      result = result.filter(item => item["CURRENT STATUS"] === statusFilter);
     }
 
     // Sorting
     result.sort((a, b) => {
-      const dateA = a.date_closed ? new Date(a.date_closed).getTime() : 0;
-      const dateB = b.date_closed ? new Date(b.date_closed).getTime() : 0;
+      const dateA = a["Closed Date"] ? new Date(a["Closed Date"]).getTime() : 0;
+      const dateB = b["Closed Date"] ? new Date(b["Closed Date"]).getTime() : 0;
       return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
     });
 
@@ -178,8 +178,8 @@ export default function ServiceBillingReport() {
                   </td>
                 </tr>
               ) : (
-                filteredData.map((row) => (
-                  <tr key={row.id} className="hover:bg-bg-base/50 transition-colors group">
+                filteredData.map((row, idx) => (
+                  <tr key={`${row["Customer Code"]}-${row["Date"]}-${idx}`} className="hover:bg-bg-base/50 transition-colors group">
                     <td className="p-4 px-6">
                       <span className={`px-2 py-1 rounded text-[10px] font-black border ${
                         row.region === 'KZN' ? 'bg-blue-50 text-blue-600 border-blue-200' :
@@ -191,23 +191,23 @@ export default function ServiceBillingReport() {
                       </span>
                     </td>
                     <td className="p-4">
-                      <p className="font-bold text-text-primary">{row.client_name || 'Unnamed Client'}</p>
-                      <p className="text-xs text-text-secondary font-mono">{row.customer_code}</p>
+                      <p className="font-bold text-text-primary">{row["Client Name"] || 'Unnamed Client'}</p>
+                      <p className="text-xs text-text-secondary font-mono">{row["Customer Code"]}</p>
                     </td>
                     <td className="p-4">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 text-xs text-text-secondary">
                           <span className="font-bold text-[9px] uppercase opacity-50 w-12 italic">Opened:</span>
-                          <span>{row.date_opened ? new Date(row.date_opened).toLocaleDateString() : 'N/A'}</span>
+                          <span>{row["Date"] ? new Date(row["Date"]).toLocaleDateString() : 'N/A'}</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-text-primary">
                           <span className="font-bold text-[9px] uppercase opacity-50 w-12 italic">Closed:</span>
-                          <span className="font-bold">{row.date_closed ? new Date(row.date_closed).toLocaleDateString() : '---'}</span>
+                          <span className="font-bold">{row["Closed Date"] ? new Date(row["Closed Date"]).toLocaleDateString() : '---'}</span>
                         </div>
                       </div>
                     </td>
                     <td className="p-4">
-                      <StatusBadge status={row.status} />
+                      <StatusBadge status={row["CURRENT STATUS"]} />
                     </td>
                     <td className="p-4 text-right pr-6">
                       <span className="text-sm font-black text-emerald-600">
