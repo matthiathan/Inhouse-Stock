@@ -1,11 +1,12 @@
 import { supabase } from '../lib/supabase';
 
-export type SclStatus = 'Open' | 'In Progress' | 'Closed';
+export type SclStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed';
 
 export const VALID_SCL_TRANSITIONS: Record<SclStatus | 'Assigned', SclStatus[]> = {
   'Open': ['In Progress'],
   'Assigned': ['In Progress'],
-  'In Progress': ['Open', 'Closed'],
+  'In Progress': ['Open', 'Closed', 'Resolved'],
+  'Resolved': ['Open', 'Closed'],
   'Closed': ['Open', 'In Progress'] // Manager can re-open
 };
 

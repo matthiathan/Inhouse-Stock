@@ -3,11 +3,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { contractRepository } from '../services/api/contractRepository';
 import { useQuery } from '@tanstack/react-query';
+import { supabase } from '../lib/supabase';
 import { userRepository } from '../features/users/repository';
 import { assetRepository } from '../services/api/assetRepository';
 import { sclRepository } from '../features/dispatch/repository';
 import { toast } from 'sonner';
-import { sclSchema, SclSchemaValue } from '../features/dispatch/schema';
+import { sclSchema, SCLFormData } from '../features/dispatch/schema';
 import { useContractLookup, useSubmitSCL } from '../features/dispatch/hooks';
 import { ComboBox } from './ui/ComboBox';
 import { AlertCircle, ShieldAlert, CheckCircle, RefreshCcw } from 'lucide-react';
@@ -20,28 +21,30 @@ import {
 } from '../utils/sclStateMachine';
 import { User, Machine } from '../types';
 
-interface SCLCustomer {
-  id: string;
-  name: string;
-  code: string;
-  address: string;
-}
-
-const EMPTY_ARRAY: SCLCustomer[] = [];
-
 export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
   const [region, setRegion] = useState<'KZN' | 'JHB' | 'CPT'>('KZN');
   const submitSclMutation = useSubmitSCL();
 
-  const { data: customers = EMPTY_ARRAY, isLoading: isCustomersLoading } = useQuery({
-    queryKey: ['contract-customers', region],
+  const { data: customers = [], isLoading: isCustomersLoading } = useQuery({
+    queryKey: ['dispatch-customers'],
     queryFn: async () => {
-      const names = await contractRepository.getContractCustomers(region);
-      return names.map(name => ({
-        id: name,
-        name: name,
-        code: '',
-        address: ''
+      // Query the unified customers table directly
+      const { data, error } = await supabase
+        .from('customers')
+        .select('id, name, region, code, address')
+        .order('name');
+        
+      if (error) throw error;
+      
+      // Map to the format expected by your ComboBox
+      return data.map(c => ({
+        id: c.id,
+        value: c.id,
+        label: `${c.name} (${c.region})`,
+        name: c.name,
+        code: c.code,
+        address: c.address,
+        region: c.region
       }));
     }
   });
@@ -60,12 +63,18 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
   const [isBlocked, setIsBlocked] = useState<boolean>(false);
   const [activeSerial, setActiveSerial] = useState<string>('');
 
-  const { control, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<SclSchemaValue>({
+  const generateDocNo = () => {
+    const dateStr = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+    const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `SCL-${dateStr}-${randomStr}`;
+  };
+
+  const { control, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<SCLFormData>({
     resolver: zodResolver(sclSchema),
     defaultValues: {
-      doc_no: '',
+      doc_no: generateDocNo(),
       do_number: '',
-      priority: 'Low',
+      priority: 'Medium',
       current_status: 'Open',
       service_type: 'Maintenance',
       sub_task: '',
@@ -202,7 +211,7 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
       if (aggType.includes('install')) {
         setValue('service_type', 'Installation');
       } else if (aggType.includes('repair') || aggType.includes('break') || aggType.includes('corr')) {
-        setValue('service_type', 'Repair');
+        setValue('service_type', 'Maintenance');
       } else {
         setValue('service_type', 'Maintenance');
       }
@@ -217,7 +226,7 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
     }
   };
 
-  const onSubmit = async (data: SclSchemaValue) => {
+  const onSubmit = async (data: SCLFormData) => {
     if (isAssetDispatchDisabled(data.serial_number)) {
       toast.error('Dispatch is disabled for this DEFECTIVE asset pending manager approval.');
       return;
@@ -318,152 +327,161 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
             render={({ field }) => (
               <input 
                 {...field} 
-                placeholder="DOC-001" 
-                className="w-full text-sm p-2 border border-gray-300 rounded focus:border-brand-gold focus:outline-none" 
+                readOnly
+                className="w-full text-sm p-2 border border-gray-100 rounded focus:outline-none bg-gray-50 text-gray-500 font-mono" 
               />
             )}
           />
           {errors.doc_no && <p className="text-red-500 text-xs mt-1">{errors.doc_no.message}</p>}
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* DO NUMBER - Optional */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-500">
+              DO Number (Optional)
+            </label>
+            <Controller
+              name="do_number"
+              control={control}
+              render={({ field }) => (
+                <input
+                  {...field}
+                  value={field.value || ''}
+                  className="w-full px-3 py-2 bg-white text-gray-900 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
+                  placeholder="Leave blank if none"
+                />
+              )}
+            />
+          </div>
+
+          {/* SERVICE TYPE - Dropdown */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-500">
+              Service Type
+            </label>
+            <Controller
+              name="service_type"
+              control={control}
+              render={({ field }) => (
+                <select
+                  {...field}
+                  className="w-full px-3 py-2 bg-white text-gray-900 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-brand-gold focus:border-brand-gold"
+                >
+                  <option value="Maintenance">Maintenance</option>
+                  <option value="Upliftment">Upliftment</option>
+                  <option value="Installation">Installation</option>
+                  <option value="Collections">Collections</option>
+                  <option value="Deliveries">Deliveries</option>
+                  <option value="Complaint">Complaint</option>
+                </select>
+              )}
+            />
+            {errors.service_type && (
+              <p className="text-red-500 text-sm mt-1">{errors.service_type.message}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-gray-500">Division / Region</label>
+          <div className="flex gap-2">
+            {(['KZN', 'JHB', 'CPT'] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => handleRegionChange(r)}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all duration-200 ${
+                  region === r 
+                    ? 'bg-brand-gold text-white border-brand-gold shadow-sm font-bold' 
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">DO Number</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Customer</label>
           <Controller
-            name="do_number"
+            name="customer_id"
             control={control}
             render={({ field }) => (
-              <input 
-                {...field} 
-                placeholder="DO-12345" 
-                className="w-full text-sm p-2 border border-gray-300 rounded focus:border-brand-gold focus:outline-none" 
+              <ComboBox
+                options={customers}
+                value={field.value}
+                onChange={field.onChange}
+                placeholder={isCustomersLoading ? "Loading customers..." : "Search and select customer from contracts..."}
               />
             )}
           />
-          {errors.do_number && <p className="text-red-500 text-xs mt-1">{errors.do_number.message}</p>}
+          {errors.customer_id && <p className="text-red-500 text-xs mt-1">{errors.customer_id.message}</p>}
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <label className="block text-xs font-medium text-gray-500">Division / Region</label>
-        <div className="flex gap-2">
-          {(['KZN', 'JHB', 'CPT'] as const).map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => handleRegionChange(r)}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all duration-200 ${
-                region === r 
-                  ? 'bg-brand-gold text-white border-brand-gold shadow-sm font-bold' 
-                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
-      </div>
+        {selectedCustomerId && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50/50 p-3 rounded-lg border border-gray-100">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Asset Serial Number</label>
+              <Controller
+                name="serial_number"
+                control={control}
+                render={({ field }) => (
+                  <ComboBox
+                    options={filteredMachines.map(m => ({ label: `${m.serial_number} - ${m.asset_name}`, value: m.serial_number }))}
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="Select serial number..."
+                  />
+                )}
+              />
+              {errors.serial_number && <p className="text-red-500 text-xs mt-1">{errors.serial_number.message}</p>}
+            </div>
 
-      <div>
-        <label className="block text-xs font-medium text-gray-500 mb-1">Customer</label>
-        <Controller
-          name="customer_id"
-          control={control}
-          render={({ field }) => (
-            <ComboBox
-              options={customers.map(c => ({ label: c.name, value: c.id }))}
-              value={field.value}
-              onChange={field.onChange}
-              placeholder={isCustomersLoading ? "Loading customers..." : "Search and select customer from contracts..."}
-            />
-          )}
-        />
-        {errors.customer_id && <p className="text-red-500 text-xs mt-1">{errors.customer_id.message}</p>}
-      </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Asset QR Code</label>
+              <Controller
+                name="qrcode"
+                control={control}
+                render={({ field }) => (
+                  <input 
+                    type="text" 
+                    value={field.value} 
+                    disabled 
+                    placeholder="QR Code auto-fills" 
+                    className="w-full text-sm p-2 border border-blue-100 bg-blue-50/20 text-gray-500 rounded font-mono" 
+                  />
+                )}
+              />
+              {errors.qrcode && <p className="text-red-500 text-xs mt-1">{errors.qrcode.message}</p>}
+            </div>
+          </div>
+        )}
 
-      {selectedCustomerId && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50/50 p-3 rounded-lg border border-gray-100">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Asset Serial Number</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
             <Controller
-              name="serial_number"
+              name="priority"
               control={control}
               render={({ field }) => (
                 <ComboBox
-                  options={filteredMachines.map(m => ({ label: `${m.serial_number} - ${m.asset_name}`, value: m.serial_number }))}
+                  options={[
+                    { label: 'Low', value: 'Low' },
+                    { label: 'Medium', value: 'Medium' },
+                    { label: 'High', value: 'High' },
+                    { label: 'Critical', value: 'Critical' }
+                  ]}
                   value={field.value}
                   onChange={field.onChange}
-                  placeholder="Select serial number..."
+                  searchable={false}
                 />
               )}
             />
-            {errors.serial_number && <p className="text-red-500 text-xs mt-1">{errors.serial_number.message}</p>}
+            {errors.priority && <p className="text-red-500 text-xs mt-1">{errors.priority.message}</p>}
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Asset QR Code</label>
-            <Controller
-              name="qrcode"
-              control={control}
-              render={({ field }) => (
-                <input 
-                  type="text" 
-                  value={field.value} 
-                  disabled 
-                  placeholder="QR Code auto-fills" 
-                  className="w-full text-sm p-2 border border-blue-100 bg-blue-50/20 text-gray-500 rounded font-mono" 
-                />
-              )}
-            />
-            {errors.qrcode && <p className="text-red-500 text-xs mt-1">{errors.qrcode.message}</p>}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
-          <Controller
-            name="priority"
-            control={control}
-            render={({ field }) => (
-              <ComboBox
-                options={[
-                  { label: 'Low', value: 'Low' },
-                  { label: 'Medium', value: 'Medium' },
-                  { label: 'High', value: 'High' },
-                  { label: 'Critical', value: 'Critical' }
-                ]}
-                value={field.value}
-                onChange={field.onChange}
-                searchable={false}
-              />
-            )}
-          />
-          {errors.priority && <p className="text-red-500 text-xs mt-1">{errors.priority.message}</p>}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Service Type</label>
-          <Controller
-            name="service_type"
-            control={control}
-            render={({ field }) => (
-              <ComboBox
-                options={[
-                  { label: 'Maintenance', value: 'Maintenance' },
-                  { label: 'Installation', value: 'Installation' },
-                  { label: 'Repair', value: 'Repair' }
-                ]}
-                value={field.value}
-                onChange={field.onChange}
-                searchable={false}
-              />
-            )}
-          />
-          {errors.service_type && <p className="text-red-500 text-xs mt-1">{errors.service_type.message}</p>}
-        </div>
-
-        <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">Call Status</label>
           <Controller
             name="current_status"
@@ -473,6 +491,7 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
                 options={[
                   { label: 'Open', value: 'Open' },
                   { label: 'In Progress', value: 'In Progress' },
+                  { label: 'Resolved', value: 'Resolved' },
                   { label: 'Closed', value: 'Closed' }
                 ]}
                 value={field.value}

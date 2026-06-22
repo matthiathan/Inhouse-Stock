@@ -2,16 +2,27 @@ import { z } from 'zod';
 
 export const sclSchema = z.object({
   doc_no: z.string().min(1, 'Doc No is required'),
-  do_number: z.string().min(1, 'DO Number is required'),
+  // Make DO number optional and allow it to be empty/null
+  do_number: z.string().optional().nullable(),
   priority: z.enum(['Low', 'Medium', 'High', 'Critical']),
-  current_status: z.enum(['Open', 'In Progress', 'Closed']),
-  service_type: z.enum(['Maintenance', 'Installation', 'Repair']),
-  sub_task: z.string().min(1, 'Sub task is required'),
-  customer_id: z.string().min(1, 'Customer selection is required'),
-  assigned_employee_id: z.string().min(1, 'Technician assignment is required'),
-  serial_number: z.string().min(1, 'Serial number selection is required'),
-  qrcode: z.string().min(1, 'QR Code selection is required'),
-  narration: z.string().min(1, 'Narration/Issue is required'),
+  current_status: z.enum(['Open', 'In Progress', 'Resolved', 'Closed']),
+  
+  // Restrict to your specific service types
+  service_type: z.enum([
+    'Maintenance', 
+    'Upliftment', 
+    'Installation', 
+    'Collections', 
+    'Deliveries', 
+    'Complaint'
+  ]),
+  
+  sub_task: z.string().optional(),
+  narration: z.string().min(1, 'Narration is required'),
+  customer_id: z.string().min(1, 'Customer is required'),
+  assigned_employee_id: z.string().min(1, 'Technician is required'),
+  serial_number: z.string().optional(),
+  qrcode: z.string().optional()
 });
 
-export type SclSchemaValue = z.infer<typeof sclSchema>;
+export type SCLFormData = z.infer<typeof sclSchema>;

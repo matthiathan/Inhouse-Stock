@@ -73,7 +73,7 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
                   key={option.value}
                   type="button"
                   className={cn(
-                    'w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between transition-colors',
+                    'w-full text-left px-3 py-2 text-sm bg-white text-gray-900 hover:bg-gray-100 flex items-center justify-between transition-colors',
                     value === option.value && 'bg-blue-50/70 text-blue-700 font-medium'
                   )}
                   onClick={() => {
