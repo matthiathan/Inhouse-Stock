@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { Order, OrderItem } from '../types';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { CheckCircle2, AlertCircle, Plus, Camera, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Plus, Camera, Loader2, CheckCircle, Clock } from 'lucide-react';
 import { 
   useOrdersWithItems, 
   useCreateOrder, 
@@ -19,6 +19,30 @@ import {
 export function OrdersPage() {
   const { role, isAdmin, isOpsManager } = useAuth();
   
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Fulfilled':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/20">
+            <CheckCircle className="w-3.5 h-3.5" />
+            Completed
+          </span>
+        );
+      case 'Pending':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-gold/15 text-brand-gold border border-brand-gold/20">
+            <Clock className="w-3.5 h-3.5" />
+            Pending
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gray-500/15 text-gray-400 border border-gray-500/20">
+            {status}
+          </span>
+        );
+    }
+  };
   // React Query Hooks
   const { data: dbData, isLoading: loadingOrders } = useOrdersWithItems();
   const orders = dbData?.orders || [];
@@ -296,9 +320,7 @@ export function OrdersPage() {
                       <td className="px-4 py-3 font-mono">{o.order_number}</td>
                       <td className="px-4 py-3">{o.delivery_date}</td>
                       <td className="px-4 py-3">
-                        <span className="px-2 py-1 bg-emerald-900/40 text-emerald-400 rounded-full text-xs font-semibold">
-                          Fulfilled
-                        </span>
+                        {getStatusBadge(o.status)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button 

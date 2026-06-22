@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { CheckCircle, Package, ArrowLeft, RefreshCw, Barcode as BarcodeIcon, Play, QrCode } from 'lucide-react';
 import { orderRepository } from '../services/api/orderRepository';
+import { Button } from './ui/Button';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -22,6 +23,7 @@ interface ActiveFulfillmentProps {
 
 export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmentProps) {
   const [items, setItems] = useState<OrderItem[]>([]);
+  const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -32,23 +34,29 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
   useEffect(() => {
     async function fetchOrder() {
       try {
-        // Use a join to get item details directly from the 'stock' table
-        const { data, error } = await supabase
-          .from('order_items')
-          .select(`
-            id,
-            order_id,
-            required_quantity,
-            scanned_quantity,
-            stock_barcode,
-            stock (item_name, barcode)
-          `)
-          .eq('order_id', orderId);
+        // Fetch order and items
+        const [orderRes, itemsRes] = await Promise.all([
+          supabase.from('orders').select('*').eq('id', orderId).single(),
+          supabase
+            .from('order_items')
+            .select(`
+              id,
+              order_id,
+              required_quantity,
+              scanned_quantity,
+              stock_barcode,
+              stock (item_name, barcode)
+            `)
+            .eq('order_id', orderId)
+        ]);
 
-        if (error) throw error;
+        if (orderRes.error) throw orderRes.error;
+        if (itemsRes.error) throw itemsRes.error;
+
+        setOrder(orderRes.data);
         
         // Map the joined data to your internal state
-        const initialized = (data || []).map((item: any) => ({
+        const initialized = (itemsRes.data || []).map((item: any) => ({
           id: item.id,
           order_id: item.order_id,
           // Fallback to stock record if item_name/barcode are null in order_items
@@ -160,6 +168,23 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
       <div className="flex flex-col items-center justify-center p-12 bg-bg-base min-h-screen">
         <RefreshCw className="w-10 h-10 animate-spin text-brand-gold" />
         <p className="mt-4 text-text-secondary font-medium">Initializing picking list...</p>
+      </div>
+    );
+  }
+
+  if (order?.status === 'Fulfilled') {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 bg-bg-elevated rounded-lg border border-brand-border text-center space-y-4 mt-8">
+        <div className="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-2">
+          <CheckCircle className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-bold text-white">Order Completed</h2>
+        <p className="text-text-secondary">
+          This order was fulfilled and stock has already been deducted.
+        </p>
+        <Button onClick={onClose} variant="primary">
+          Return to Orders
+        </Button>
       </div>
     );
   }
