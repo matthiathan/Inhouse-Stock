@@ -77,7 +77,6 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
     fetchOrder();
   }, [orderId]);
 
-  // 2. Progressive Picking Logic
   const handleScan = async (decodedText: string) => {
     if (processingRef.current) return;
     processingRef.current = true;
@@ -85,47 +84,46 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
 
     if (navigator.vibrate) navigator.vibrate(200);
 
+    const itemToUpdate = items.find(i => i.stock_barcode.trim().toLowerCase() === decodedText.trim().toLowerCase());
+    
+    if (!itemToUpdate) {
+      toast.error(`Item ${decodedText} not found in this order`);
+      processingRef.current = false;
+      setIsProcessing(false);
+      return;
+    }
+    
+    if (itemToUpdate.scanned_quantity >= itemToUpdate.required_quantity) {
+      toast.info(`${itemToUpdate.item_name} is already fully picked`);
+      processingRef.current = false;
+      setIsProcessing(false);
+      return;
+    }
+
+    // 1. Cache the previous state
+    const previousItems = [...items];
+
+    // 2. Optimistic UI Update (Instant feedback)
+    setItems(prev => prev.map(i => 
+      i.id === itemToUpdate.id ? { ...i, scanned_quantity: i.scanned_quantity + 1 } : i
+    ));
+
     try {
-      const itemToUpdate = items.find(i => i.stock_barcode.trim().toLowerCase() === decodedText.trim().toLowerCase());
-      
-      if (!itemToUpdate) {
-        toast.error(`Item ${decodedText} not found in this order`);
-        return;
-      }
-      
-      if (itemToUpdate.scanned_quantity >= itemToUpdate.required_quantity) {
-        toast.info(`${itemToUpdate.item_name} is already fully picked`);
-        return;
-      }
-
-      // Update DB
-      const { error } = await supabase
-        .from('order_items')
-        .update({ 
-          scanned_quantity: itemToUpdate.scanned_quantity + 1,
-          is_fulfilled: itemToUpdate.scanned_quantity + 1 >= itemToUpdate.required_quantity
-        })
-        .eq('id', itemToUpdate.id);
-      
-      if (error) throw error;
-
-      // Update Local
-      setItems(prevItems => {
-        const newItems = [...prevItems];
-        const index = newItems.findIndex(i => i.id === itemToUpdate.id);
-        newItems[index] = {
-          ...newItems[index],
-          scanned_quantity: newItems[index].scanned_quantity + 1,
-          is_fulfilled: newItems[index].scanned_quantity + 1 >= newItems[index].required_quantity
-        };
-        return newItems;
+      // 3. Network Call (using RPC)
+      const { error } = await supabase.rpc('fulfill_item', {
+        item_id: itemToUpdate.id,
+        qty: 1
       });
+
+      if (error) throw error;
       
       toast.success(`Picked: ${itemToUpdate.item_name}`);
-
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to update scan.");
+      
+    } catch (error: any) {
+      // 4. REVERT on failure and notify user
+      console.error("Failed to update database:", error);
+      setItems(previousItems); // Rollback UI
+      toast.error("Network error: Item scan not saved. Please scan again.");
     } finally {
       setTimeout(() => {
         processingRef.current = false;

@@ -60,8 +60,11 @@ export default function BarcodeScanner({
 
   useEffect(() => {
     if (!enabled) return;
+    if (scannerInstanceRef.current) return;
+
     let isMounted = true;
     let scanTimeoutId: NodeJS.Timeout | null = null;
+    let scanner: Html5Qrcode | null = null;
 
     const startScanner = async () => {
       // 1. Fake loading delay to hide hardware flash
@@ -73,7 +76,7 @@ export default function BarcodeScanner({
         // Prevent starting if container element is unmounted
         if (!document.getElementById(containerId)) return;
 
-        const scanner = new Html5Qrcode(containerId);
+        scanner = new Html5Qrcode(containerId);
         scannerInstanceRef.current = scanner;
 
         await scanner.start(
@@ -146,6 +149,7 @@ export default function BarcodeScanner({
           setHasError(message || "Failed to start camera");
           setIsInitializing(false);
           setShowRestartButton(true);
+          scannerInstanceRef.current = null;
         }
       }
     };
@@ -162,8 +166,9 @@ export default function BarcodeScanner({
       cleanupTorch();
 
       const currentScanner = scannerInstanceRef.current;
+      scannerInstanceRef.current = null; // Instantly nullify key ref
+      
       if (currentScanner) {
-        scannerInstanceRef.current = null; // Instantly nullify key ref
         if (currentScanner.isScanning) {
           currentScanner.stop()
             .then(() => {

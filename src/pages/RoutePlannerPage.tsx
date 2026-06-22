@@ -6,6 +6,20 @@ import { useCustomers } from '../features/customers/hooks';
 import { useTechnicians } from '../features/users/hooks';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix for Vite + Leaflet marker URLs
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+
+L.Icon.Default.mergeOptions({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow,
+});
 import { ComboBox } from '../components/ui/ComboBox';
 import { SCLDispatchForm } from '../components/SCLDispatchForm';
 import { calculateTechnicianScore } from '../utils/dispatchScoring';
@@ -29,18 +43,6 @@ import {
   QrCode,
   ArrowRight
 } from 'lucide-react';
-
-const icon = 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png';
-const iconShadow = 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png';
-
-// Setup Leaflet marker icon
-let DefaultIcon = L.icon({
-  iconUrl: icon,
-  shadowUrl: iconShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41]
-});
-L.Marker.prototype.options.icon = DefaultIcon;
 
 // Custom function to color different priority SCL markers
 const createCustomMarker = (priority: string, status: string) => {
