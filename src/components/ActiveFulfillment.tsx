@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { CheckCircle, Package, ArrowLeft, RefreshCw, Barcode as BarcodeIcon, Play, QrCode } from 'lucide-react';
+import { orderRepository } from '../services/api/orderRepository';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -39,7 +40,8 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
             order_id,
             required_quantity,
             scanned_quantity,
-            stock:stock_barcode (item_name, barcode)
+            stock_barcode,
+            stock (item_name, barcode)
           `)
           .eq('order_id', orderId);
 
@@ -136,23 +138,8 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
 
     setIsCompleting(true);
     try {
-      // Step A: Update Order Status
-      const { error: orderError } = await supabase
-        .from('orders')
-        .update({ 
-          status: 'Fulfilled',
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', orderId);
-
-      if (orderError) throw orderError;
-
-      // Step B: Upsert Order Items (saving picking progress)
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .upsert(items);
-
-      if (itemsError) throw itemsError;
+      // Execute atomic transaction
+      await orderRepository.completeOrderTransaction(orderId);
 
       toast.success("Order fulfilled!");
       onClose();

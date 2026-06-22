@@ -68,7 +68,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       }`}
     >
       {/* Header */}
-      <div className={`flex items-center h-16 border-b border-brand-border ${isCollapsed ? 'justify-center px-0' : 'justify-between px-6'}`}>
+      <div className={`flex items-center h-16 border-b border-brand-border shrink-0 ${isCollapsed ? 'justify-center px-0' : 'justify-between px-6'}`}>
         <div className="flex items-center gap-3 overflow-hidden w-full justify-center">
           {isCollapsed ? (
             /* Royal Crest crop on Collapsed Side */
@@ -130,7 +130,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       </nav>
 
       {/* Footer / Pinned User Section */}
-      <div className={`p-4 border-t border-brand-border bg-dallmayr-blue/[0.02] dark:bg-dallmayr-gold/[0.01] flex flex-col gap-4 ${isCollapsed ? 'items-center' : ''}`}>
+      <div className={`p-4 border-t border-brand-border bg-dallmayr-blue/[0.02] dark:bg-dallmayr-gold/[0.01] flex flex-col gap-4 shrink-0 ${isCollapsed ? 'items-center' : ''}`}>
         
         {/* User Info */}
         <div className={`flex items-center gap-3 ${isCollapsed ? 'justify-center' : ''}`}>

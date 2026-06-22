@@ -84,24 +84,13 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 transition-colors duration-300">
-      {/* Mobile Header */}
-      <header className="md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-white/95 dark:bg-[#111] border-b border-gray-200 dark:border-gray-800 backdrop-blur-sm shadow-sm">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setIsMobileMenuOpen(true)}
-            className="p-2 -ml-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors"
-          >
-            <Menu size={24} />
-          </button>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="text-gray-900 dark:text-white" size={24} />
-            <h1 className="font-black text-lg tracking-tight">DALLMAYR</h1>
-          </div>
-        </div>
-      </header>
+    <div className="flex h-screen bg-bg-base overflow-hidden font-sans text-text-primary">
+      {/* Desktop Sidebar (Hidden on Mobile) */}
+      <div className="hidden md:flex md:w-64 md:flex-shrink-0 border-r border-brand-border">
+        <Sidebar isCollapsed={isSidebarCollapsed} setIsCollapsed={setIsSidebarCollapsed} />
+      </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer Overlay (Hidden on Desktop) */}
       <MobileDrawer 
         isOpen={isMobileMenuOpen} 
         onClose={() => setIsMobileMenuOpen(false)}
@@ -112,29 +101,41 @@ export default function DashboardLayout() {
         toggleTheme={() => setIsDark(!isDark)}
         onLogout={logout}
       />
-      
-      <Sidebar isCollapsed={isSidebarCollapsed} setIsCollapsed={setIsSidebarCollapsed} />
 
       {/* Main Content Area */}
-      <main 
-        className={`flex-1 min-h-screen transition-all duration-300 ease-in-out pt-16 md:pt-0 ${
-          isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'
-        }`}
-      >
-        {/* Desktop Breadcrumb Header */}
-        <div className="hidden md:flex h-16 border-b border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-black/50 backdrop-blur-sm sticky top-0 z-30 px-8 items-center justify-between">
-          {generateBreadcrumbs()}
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] uppercase font-black tracking-widest text-gray-400 dark:text-gray-500">
-              Workspace
-            </span>
+      <div className="flex flex-col flex-1 w-full min-w-0 overflow-hidden">
+        {/* Mobile Header (Hidden on Desktop) */}
+        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-bg-elevated border-b border-brand-border z-10 shrink-0">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="text-text-primary" size={24} />
+            <span className="font-bold text-lg tracking-wider">DALLMAYR</span>
           </div>
-        </div>
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="p-2 text-text-secondary hover:text-brand-gold hover:bg-bg-base rounded-md transition-colors"
+            aria-label="Open mobile menu"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+        </header>
 
-        <div className="p-4 md:p-8">
-          <Outlet />
-        </div>
-      </main>
+        {/* Scrollable Main Content */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden relative bg-bg-base">
+          {/* Desktop Breadcrumb Header */}
+            <div className="hidden md:flex h-16 border-b border-brand-border bg-bg-elevated sticky top-0 z-30 px-8 items-center justify-between">
+              {generateBreadcrumbs()}
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] uppercase font-black tracking-widest text-text-secondary">
+                  Workspace
+                </span>
+              </div>
+            </div>
+
+          <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
