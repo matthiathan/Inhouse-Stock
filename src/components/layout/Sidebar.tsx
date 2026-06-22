@@ -74,11 +74,11 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         <div className="flex items-center gap-3 overflow-hidden w-full justify-center">
           {isCollapsed ? (
             /* Royal Crest crop on Collapsed Side */
-            <div className="w-10 h-10 overflow-hidden relative flex items-center justify-center shrink-0">
+            <div className="w-14 h-14 overflow-hidden relative flex items-center justify-center shrink-0">
               <img 
                 src={isDark ? DallmayrLogoDark : DallmayrLogoLight} 
-                className="max-w-none h-10 absolute left-0" 
-                style={{ left: '-2.5px' }}
+                className="max-w-none h-14 absolute left-0" 
+                style={{ left: '-3.5px' }}
                 alt="Dallmayr Crest" 
               />
             </div>
@@ -86,7 +86,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             /* Full Premium Dallmayr South Africa Identity Logo */
             <img 
               src={isDark ? DallmayrLogoDark : DallmayrLogoLight} 
-              className="h-10 w-auto max-w-full object-contain transition-all duration-300"
+              className="h-14 w-auto max-w-full object-contain transition-all duration-300"
               alt="Dallmayr South Africa" 
             />
           )}
