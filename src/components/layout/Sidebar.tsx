@@ -12,7 +12,9 @@ import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'sonner';
 import { ALL_NAV_ITEMS } from '../../constants/navigation';
 // @ts-ignore
-import DallmayrLogo from '@/assets/dallmayr_logo.svg';
+import DallmayrLogoLight from '../../../assets/icon-512-light.png';
+// @ts-ignore
+import DallmayrLogoDark from '../../../assets/icon-512-dark.png';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -74,7 +76,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             /* Royal Crest crop on Collapsed Side */
             <div className="w-10 h-10 overflow-hidden relative flex items-center justify-center shrink-0">
               <img 
-                src={DallmayrLogo} 
+                src={isDark ? DallmayrLogoDark : DallmayrLogoLight} 
                 className="max-w-none h-10 absolute left-0" 
                 style={{ left: '-2.5px' }}
                 alt="Dallmayr Crest" 
@@ -83,8 +85,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
           ) : (
             /* Full Premium Dallmayr South Africa Identity Logo */
             <img 
-              src={DallmayrLogo} 
-              className="h-10 w-auto max-w-full object-contain filter drop-shadow-sm transition-all duration-300"
+              src={isDark ? DallmayrLogoDark : DallmayrLogoLight} 
+              className="h-10 w-auto max-w-full object-contain transition-all duration-300"
               alt="Dallmayr South Africa" 
             />
           )}
