@@ -31,17 +31,17 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-md bg-bg-elevated rounded-xl shadow-xl p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Scan Asset</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-900 font-medium">
+          <h2 className="text-xl font-bold text-text-primary">Scan Asset</h2>
+          <button onClick={onClose} className="text-text-secondary hover:text-text-primary font-medium">
             Close
           </button>
         </div>
 
         {isLoading && (
           <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-text-primary"></div>
           </div>
         )}
 
@@ -50,7 +50,7 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
             <ScannedMachineProfile machine={machineData} />
             <button
                 onClick={handleReset}
-                className="w-full px-5 py-3 bg-gray-100 text-gray-900 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                className="w-full px-5 py-3 bg-bg-base text-text-primary text-sm font-medium rounded-lg hover:bg-brand-border transition-colors"
             >
                 Scan Another Asset
             </button>
@@ -68,7 +68,7 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
                 </p>
                 <button
                     onClick={handleReset}
-                    className="w-full px-5 py-3 bg-gray-100 text-gray-900 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                    className="w-full px-5 py-3 bg-bg-base text-text-primary text-sm font-medium rounded-lg hover:bg-brand-border transition-colors"
                 >
                     Scan Another Asset
                 </button>

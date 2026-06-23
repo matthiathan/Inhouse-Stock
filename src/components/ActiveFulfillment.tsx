@@ -124,18 +124,25 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
       console.error("Failed to update database:", error);
       setItems(previousItems); // Rollback UI
       toast.error("Network error: Item scan not saved. Please scan again.");
+      
+      // Immediate reset on failure
+      processingRef.current = false;
+      setIsProcessing(false);
     } finally {
-      setTimeout(() => {
-        processingRef.current = false;
-        setIsProcessing(false);
-      }, 1500);
+      // Only delay reset if we are still processing (success path)
+      if (processingRef.current) {
+        setTimeout(() => {
+          processingRef.current = false;
+          setIsProcessing(false);
+        }, 1500);
+      }
     }
   };
 
   // 3. Stats & Progress
   const totalRequired = useMemo(() => items.reduce((acc, i) => acc + i.required_quantity, 0), [items]);
   const totalScanned = useMemo(() => items.reduce((acc, i) => acc + i.scanned_quantity, 0), [items]);
-  const progressPercent = totalRequired > 0 ? (totalScanned / totalRequired) * 100 : 0;
+  const progressPercent = Math.min(100, totalRequired > 0 ? (totalScanned / totalRequired) * 100 : 0);
   const isOrderComplete = totalScanned >= totalRequired && totalRequired > 0;
 
   // 4. Order Completion Logic
@@ -231,7 +238,7 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
               <div className="flex justify-between items-start gap-4">
                 <div className="space-y-1">
                   <h3 className={`font-bold text-lg leading-tight ${isDone ? 'text-emerald-900' : 'text-text-primary'}`}>
-                    {item.item_name}
+                    {item.item_name || 'Unknown Item'}
                   </h3>
                   <div className="flex items-center gap-2 text-text-secondary">
                     <BarcodeIcon className="w-3.5 h-3.5" />

@@ -10,9 +10,10 @@ export const QRScannerCamera: React.FC<QRScannerCameraProps> = ({ onScanSuccess 
 
   useEffect(() => {
     // Initialize the scanner
+    const qrboxWidth = Math.min(window.innerWidth * 0.8, 250);
     const scanner = new Html5QrcodeScanner(
       "qr-reader",
-      { fps: 10, qrbox: { width: 250, height: 250 } },
+      { fps: 10, qrbox: { width: qrboxWidth, height: qrboxWidth } },
       false
     );
 

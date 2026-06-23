@@ -38,3 +38,18 @@
   fill: #FAF6F0;
 }
 
+#qr-reader {
+  border: none !important;
+}
+#qr-reader__dashboard {
+  display: none !important;
+}
+#qr-reader a {
+  display: none !important;
+}
+#qr-reader video {
+  border-radius: 1rem !important;
+  object-fit: cover !important;
+  width: 100% !important;
+}
+
