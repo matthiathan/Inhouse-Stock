@@ -76,6 +76,11 @@ export function OrderFulfillmentPage() {
                     <p className="text-[11px] font-bold text-text-secondary flex items-center gap-1 mt-1">
                       <Clock size={12} /> Scheduled: {new Date(o.delivery_date).toLocaleDateString()}
                     </p>
+                    {o.machine && (
+                      <p className="text-[11px] font-bold text-text-secondary flex items-center gap-1 mt-1">
+                        Machine: {o.machine.asset_name} ({o.machine.serial_number})
+                      </p>
+                    )}
                   </div>
                   <span className="bg-brand-gold/10 text-brand-gold px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest">
                     Ready

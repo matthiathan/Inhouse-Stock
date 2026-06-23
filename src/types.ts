@@ -44,7 +44,7 @@ export interface Customer {
   address: string;
   latitude: number;
   longitude: number;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   created_at: string;
 }
 
@@ -75,6 +75,8 @@ export interface StockItem {
 export interface Order {
   id: string;
   order_number: string;
+  machine_id?: string | null;
+  machine?: Machine;
   delivery_date: string;
   status: 'Pending' | 'Fulfilled' | 'Cancelled';
   created_at: string;
@@ -96,7 +98,7 @@ export interface ServiceCallLog {
   customer_id: string;
   asset_id: string;
   assigned_employee_id: string;
-  status: 'Open' | 'In Progress' | 'Closed';
+  current_status: 'Open' | 'In Progress' | 'Closed';
   priority: 'Low' | 'Medium' | 'High' | 'Critical';
   doc_no: string;
   do_number: string;
@@ -112,7 +114,6 @@ export interface ServiceCallLog {
   address?: string;
   qrcode?: string;
   service_type?: string;
-  [key: string]: any;
 }
 
 export interface FinanceServiceRecord {
@@ -121,6 +122,7 @@ export interface FinanceServiceRecord {
   asset_id?: string;
   assigned_employee_id?: string;
   status?: string;
+  current_status?: string;
   priority?: string;
   doc_no?: string;
   do_number?: string;
@@ -132,7 +134,6 @@ export interface FinanceServiceRecord {
   created_at?: string;
   date_created?: string | null;
   region?: string | null;
-  [key: string]: any;
 }
 
 export type AppRole = 'admin' | 'user' | 'tech' | 'road_tech' | 'warehouse' | 'ops_manager' | 'finance';
@@ -142,11 +143,11 @@ export interface User {
   full_name: string;
   email: string;
   role: AppRole;
+  region: Region;
   latitude: number;
   longitude: number;
   created_at: string;
   name?: string;
-  [key: string]: any;
 }
 
 export interface Machine {
@@ -156,11 +157,9 @@ export interface Machine {
   asset_name: string;
   section: string;
   photo_url?: string | null;
-  [key: string]: any;
 }
 
 export interface Section {
   id: string;
   section_name: string;
-  [key: string]: any;
 }

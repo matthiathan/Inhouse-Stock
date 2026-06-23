@@ -51,6 +51,7 @@ export class OrderRepository extends BaseRepository<Order> {
       .from('orders')
       .select(`
         *,
+        machine:machines (*),
         order_items (*)
       `)
       .order('created_at', { ascending: false });

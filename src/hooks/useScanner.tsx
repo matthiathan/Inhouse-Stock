@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 export const useScanner = (
@@ -8,11 +8,12 @@ export const useScanner = (
     fps: 10,
     qrbox: { width: 250, height: 250 },
     aspectRatio: 1.0,
-    // Force the back camera and high resolution
+    // Force the back camera and high resolution, autofocus
     videoConstraints: {
       facingMode: "environment",
       width: { ideal: 1920 },
-      height: { ideal: 1080 }
+      height: { ideal: 1080 },
+      advanced: [{ focusMode: "continuous" }]
     }
   },
   enabled: boolean = true,
@@ -20,6 +21,8 @@ export const useScanner = (
 ) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const lastVibrateRef = useRef<number>(0);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   // Stabilize callbacks using ref pattern to avoid triggering effect runs when props change
   const onScanSuccessRef = useRef(onScanSuccess);
@@ -43,7 +46,6 @@ export const useScanner = (
     let isMounted = true;
 
     const initializeScanner = async () => {
-      // Check if element exists before initializing to prevent "Element not found" errors
       const element = document.getElementById(elementId);
       if (!element) return;
 
@@ -57,16 +59,20 @@ export const useScanner = (
           
           try {
             await scannerRef.current.start(
-              { facingMode: configRef.current.videoConstraints?.facingMode || "environment" },
-              configRef.current,
+              { facingMode: { exact: "environment" } },
+              {
+                ...configRef.current,
+                videoConstraints: {
+                  ...configRef.current.videoConstraints,
+                  facingMode: { exact: "environment" },
+                }
+              },
               (decodedText) => {
                 if (isMounted) onScanSuccessRef.current(decodedText);
               },
               (errorMessage) => {
                 if (!isMounted) return;
 
-                // Handle scan failure elegantly
-                // Filter out verbose NotFoundException and silent frames, focussing on genuine scanning errors
                 const isSilentError = !errorMessage || 
                   errorMessage.includes('NotFoundException') || 
                   errorMessage.includes('No MultiFormat Reader') || 
@@ -77,20 +83,41 @@ export const useScanner = (
                     onScanErrorRef.current(errorMessage);
                   }
 
-                  // Optimized haptic feedback on failed scans for mobile browser support
                   if (typeof navigator !== 'undefined' && navigator.vibrate) {
                     const now = Date.now();
-                    // Throttle the error vibration to every 1.5 seconds to prevent performance degradations
                     if (now - lastVibrateRef.current > 1500) {
-                      navigator.vibrate([100, 50, 100]); // Distinct double tap haptic signal for error indication
+                      navigator.vibrate([100, 50, 100]);
                       lastVibrateRef.current = now;
                     }
                   }
                 }
               }
             );
+
+            // Check if torch is supported
+            if (isMounted && scannerRef.current) {
+               const track = scannerRef.current.getRunningTrackCameraCapabilities();
+               if (track && track.torchFeature() && track.torchFeature().isSupported()) {
+                  setTorchSupported(true);
+               } else {
+                 setTorchSupported(false);
+               }
+            }
+
           } catch (err) {
-            console.error("Scanner failed to start:", err);
+             // Fallback if exact environment is not available
+             if (isMounted && scannerRef.current) {
+               try {
+                 await scannerRef.current.start(
+                    { facingMode: "environment" },
+                    configRef.current,
+                    (decodedText) => { if (isMounted) onScanSuccessRef.current(decodedText); },
+                    () => {}
+                 );
+               } catch (fallbackErr) {
+                 console.error("Scanner failed to start on fallback:", fallbackErr);
+               }
+             }
           }
         };
 
@@ -102,33 +129,36 @@ export const useScanner = (
 
     initializeScanner();
 
-    // CRITICAL CLEANUP BLOCK
     return () => {
       isMounted = false;
       const currentScanner = scannerRef.current;
       if (currentScanner) {
-        // Clear reference to force recreation if enabled gets toggled again
         scannerRef.current = null;
         if (currentScanner.isScanning) {
           currentScanner.stop()
             .then(() => {
-              try {
-                currentScanner.clear();
-              } catch (e) {
-                console.warn("Clear error on unmount:", e);
-              }
+              try { currentScanner.clear(); } catch (e) { }
             })
-            .catch((err) => {
-              console.error("Failed to release camera hardware:", err);
-            });
+            .catch(() => {});
         } else {
-          try {
-            currentScanner.clear();
-          } catch (e) {
-            // ignore
-          }
+          try { currentScanner.clear(); } catch (e) { }
         }
       }
     };
-  }, [elementId, enabled]); // Include enabled to re-trigger when interface opens
+  }, [elementId, enabled]);
+
+  const toggleTorch = useCallback(() => {
+     if (scannerRef.current && scannerRef.current.isScanning && torchSupported) {
+        setTorchOn(prev => {
+           const newTorchState = !prev;
+           scannerRef.current?.applyVideoConstraints({
+               advanced: [{ torch: newTorchState } as any]
+           }).catch(console.error);
+           return newTorchState;
+        });
+     }
+  }, [torchSupported]);
+
+  return { toggleTorch, torchSupported, torchOn, scannerRef: scannerRef.current };
 };
+

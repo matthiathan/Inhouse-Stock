@@ -41,6 +41,12 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
   const machineData = lookupResult?.data;
   const isNotFound = lookupResult?.isNotFound;
 
+  useEffect(() => {
+    if (isNotFound) {
+        setShowForm(true);
+    }
+  }, [isNotFound]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
       <div className="w-full max-w-md bg-bg-elevated rounded-xl shadow-xl p-6 max-h-[90vh] overflow-y-auto">

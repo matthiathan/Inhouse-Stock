@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import { useScanner } from '../hooks/useScanner';
 import { supabase } from '../lib/supabase';
 import { assetRepository } from '../services/api/assetRepository';
 import { sclRepository } from '../features/dispatch/repository';
 import { toast } from 'sonner';
-import { Camera, CheckCircle2, AlertTriangle, ArrowLeft, RefreshCw, Smartphone } from 'lucide-react';
+import { Camera, CheckCircle2, AlertTriangle, ArrowLeft, RefreshCw, Smartphone, Lightbulb, LightbulbOff } from 'lucide-react';
 import { validateSclTransition, logStateTransition, SclStatus } from '../utils/sclStateMachine';
 import { useAuth } from '../hooks/useAuth';
 import { z } from 'zod';
@@ -26,6 +27,8 @@ const closureSchema = z.object({
 });
 
 type ClosureFormValues = z.infer<typeof closureSchema>;
+
+import { processOfflineSyncQueue, enqueueClosureTask } from '../utils/offlineSync';
 
 export default function SCLTechClosurePage() {
   const { sclId } = useParams<{ sclId: string }>();
@@ -59,36 +62,39 @@ export default function SCLTechClosurePage() {
     }
   }, [sclId]);
 
+  useEffect(() => {
+    const handleOnline = () => processOfflineSyncQueue();
+    window.addEventListener('online', handleOnline);
+    processOfflineSyncQueue();
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
   const onScanSuccessRef = useRef(onScanSuccess);
   useEffect(() => {
     onScanSuccessRef.current = onScanSuccess;
-  });
+  }, [onScanSuccess]);
 
   const stableScanSuccess = useCallback((decodedText: string) => {
     onScanSuccessRef.current(decodedText);
   }, []);
 
-  useEffect(() => {
-    if (step === 1) {
-      const scanner = new Html5QrcodeScanner("qr-reader", {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0,
-      }, false);
-      scannerRef.current = scanner;
-      scanner.render(stableScanSuccess, (err) => {
-        if (err.includes("NotFoundException")) return;
-        // ignore continuous warnings
-      });
-      return () => {
-        scanner.clear().catch(console.error);
-      };
+  const { toggleTorch, torchSupported, torchOn, scannerRef: hookScannerRef } = useScanner(
+    "qr-reader",
+    stableScanSuccess,
+    {
+       fps: 10,
+       qrbox: { width: 250, height: 250 },
+       aspectRatio: 1.0,
+    },
+    step === 1,
+    (err) => {
+       if (err.includes("NotFoundException")) return;
     }
-  }, [step, stableScanSuccess]);
+  );
 
   async function onScanSuccess(decodedText: string) {
-    if (scannerRef.current) {
-        scannerRef.current.clear().catch(console.error);
+    if (hookScannerRef) {
+       // stop scanning because we found it, though hook handles it if step changes to 2
     }
     
     const machine = await assetRepository.getByQrCode(decodedText);
@@ -129,6 +135,34 @@ export default function SCLTechClosurePage() {
     }
 
     setIsSubmitting(true);
+
+    if (!navigator.onLine) {
+      toast.info('No connection detected. Saving task locally for auto-sync.');
+      
+      let photoBase64 = null;
+      if (photoFile) {
+        // Convert to base64
+        photoBase64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(photoFile);
+        });
+      }
+
+      await enqueueClosureTask({
+        sclId,
+        existingPhotoUrl: sclRecord?.photo_url,
+        photoBase64,
+        notes: data.notes,
+        serial_number: scannedMachine.serial_number,
+        qrcode: scannedMachine.qr_code,
+        status: data.status,
+      });
+
+      setIsSubmitting(false);
+      navigate('/my-route');
+      return;
+    }
 
     let photoUrl = sclRecord?.photo_url;
 
@@ -229,8 +263,18 @@ export default function SCLTechClosurePage() {
               Point your camera at the machine's QR code sticker to verify your location.
             </p>
             
-            <div className="w-full max-w-[300px] overflow-hidden rounded-2xl shadow-inner border-2 border-gray-100">
+            <div className="w-full max-w-[300px] overflow-hidden rounded-2xl shadow-inner border-2 border-gray-100 relative">
               <div id="qr-reader" className="w-full"></div>
+              {torchSupported && step === 1 && (
+                 <button
+                   onClick={(e) => { e.preventDefault(); toggleTorch(); }}
+                   className="absolute top-2 right-2 bg-black/50 text-white p-2 rounded-full backdrop-blur-md hover:bg-black/70 transition-colors z-10"
+                   title="Toggle Flashlight"
+                   aria-label="Toggle Flashlight"
+                 >
+                    {torchOn ? <LightbulbOff size={20} /> : <Lightbulb size={20} />}
+                 </button>
+              )}
             </div>
 
             {validationError && (

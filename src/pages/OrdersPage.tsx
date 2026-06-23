@@ -88,7 +88,7 @@ export function OrdersPage() {
   const fulfillItemRef = useRef(fulfillItem);
   useEffect(() => {
     fulfillItemRef.current = fulfillItem;
-  });
+  }, [fulfillItem]);
 
   const stableFulfillItem = useCallback((barcode: string) => {
     fulfillItemRef.current(barcode);

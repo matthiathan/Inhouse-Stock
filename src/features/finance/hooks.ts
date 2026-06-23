@@ -5,23 +5,22 @@ import { FinanceServiceRecord } from '../../types';
 export const useFinanceServiceData = () => {
   return useQuery<FinanceServiceRecord[]>({
     queryKey: ['financeServiceData'],
-    queryFn: async () => {
+    queryFn: async (): Promise<FinanceServiceRecord[]> => {
+      // Direct query to the Service Call Log table
       const { data, error } = await supabase
-        .from('finance_service_data')
+        .from('service_call_logs') // Replaced finance_service_data
         .select('*');
       
       if (error) throw error;
       
-      // Map the database column names to the names your components expect
-      return (data || []).map((record: any) => ({
+      return (data || []).map((record: Record<string, unknown>) => ({
         ...record,
-        // Standardize the names so your components don't see undefined
-        created_at: record.date_created,
-        closed_date: record.date_closed,
-        status: record.task_status 
+        created_at: (record.created_ts || record.created_at) as string | undefined,
+        closed_date: record.closed_date as string | null | undefined,
+        status: record.current_status as string | undefined // Deriving billing/finance status directly from SCL status
       })) as FinanceServiceRecord[];
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes fresh cache
-    gcTime: 5 * 60 * 1000,    // 5 minutes garbage collection time
+    staleTime: 5 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 };
