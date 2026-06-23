@@ -104,7 +104,10 @@ export default function SCLTechClosurePage() {
         return;
     }
 
-    if (sclRecord && machine.customer_code !== sclRecord.customer_code) {
+    const scannedCustomerRef = (machine as any).customer_code || machine.customer_id;
+    const expectedCustomerRef = (sclRecord as any)?.customer_code || sclRecord?.customer_id;
+
+    if (sclRecord && scannedCustomerRef && expectedCustomerRef && scannedCustomerRef !== expectedCustomerRef) {
         setValidationError(`Mismatch: Machine ${machine.serial_number} does not belong to the recorded customer.`);
         return;
     }

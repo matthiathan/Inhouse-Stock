@@ -238,23 +238,22 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
     const techName = tech ? (tech.full_name || tech.name || 'Technician') : 'Technician';
 
     const payload = {
-      "DocNo": data.doc_no,
-      "DO#": data.do_number,
-      "Priority": data.priority,
-      "Service Type": data.service_type,
-      "Sub Task": data.sub_task,
-      "Narration": data.narration,
+      doc_no: data.doc_no,
+      do_number: data.do_number || null,
+      priority: data.priority,
+      service_type: data.service_type,
+      sub_task: data.sub_task,
+      narration: data.narration,
       customer_id: data.customer_id,
       assigned_employee_id: data.assigned_employee_id,
-      "Serial #": data.serial_number,
-      "QRCODE": data.qrcode,
-      "Client Name": customer?.name || '',
-      "Client location": customer?.address || '',
-      "Address": customer?.address || '',
-      "Customer Code": customer?.code || '',
-      "Assigned Employee": techName,
-      "CURRENT STATUS": data.current_status,
-      "ASSIGNED DATE TIME": new Date().toISOString(),
+      serial_number: data.serial_number,
+      qrcode: data.qrcode,
+      client_name: customer?.name || '',
+      address: customer?.address || '',
+      customer_code: customer?.code || '',
+      assigned_employee: techName,
+      current_status: data.current_status,
+      assigned_date_time: new Date().toISOString(),
     };
 
     submitSclMutation.mutate(payload, {

@@ -372,7 +372,22 @@ export const archiveStockItem = async (stockId: number) => {
 
 export const createMaintenanceTicket = async (ticketData: any) => {
   try {
-    const { data, error } = await supabase.from('maintenance_tickets').insert([ticketData]);
+    const dbTicket = {
+      machine_id: ticketData.machine_id,
+      customer_id: ticketData.customer_id,
+      issue_description: ticketData.issue_description,
+      status: ticketData.status || 'Open',
+      priority: ticketData.priority || 'Medium',
+      tech_id: ticketData.tech_id,
+      scheduled_time: ticketData.scheduled_time,
+      contact_person: ticketData.contact_person,
+      contact_phone: ticketData.contact_phone,
+      service_notes: ticketData.service_notes,
+      resolution_notes: ticketData.resolution_notes,
+      photo_url: ticketData.photo_url,
+      resolved_at: ticketData.resolved_at || ticketData.completed_at,
+    };
+    const { data, error } = await supabase.from('maintenance_tickets').insert([dbTicket]);
     if (error) throw new Error(error.message);
     return { success: true, data };
   } catch (error: any) {

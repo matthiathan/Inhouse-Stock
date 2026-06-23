@@ -2455,4 +2455,3 @@ export function LoginPage() {
     </div>
   );
 }
-

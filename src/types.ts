@@ -100,16 +100,17 @@ export interface OrderItem {
 export interface ServiceCallLog {
   id: string;
   customer_id: string;
-  asset_id: string;
+  asset_id?: string;
   assigned_employee_id: string;
-  current_status: 'Open' | 'In Progress' | 'Closed';
+  current_status: 'Open' | 'In Progress' | 'Resolved' | 'Closed';
+  status?: 'Open' | 'In Progress' | 'Resolved' | 'Closed' | string;
   priority: 'Low' | 'Medium' | 'High' | 'Critical';
   doc_no: string;
-  do_number: string;
+  do_number?: string | null;
   narration: string;
-  photo_url: string | null;
-  closed_remarks: string | null;
-  closed_date: string | null;
+  photo_url?: string | null;
+  closed_remarks?: string | null;
+  closed_date?: string | null;
   created_at: string;
   assigned_date_time?: string;
   serial_number?: string;
@@ -117,7 +118,9 @@ export interface ServiceCallLog {
   client_name?: string;
   address?: string;
   qrcode?: string;
+  customer_code?: string;
   service_type?: string;
+  sub_task?: string;
 }
 
 export interface FinanceServiceRecord {
