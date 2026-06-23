@@ -6,7 +6,11 @@ export const useFulfillment = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (itemId: string) => supabase.rpc('fulfill_item', { item_id: itemId, qty: 1 }),
+    mutationFn: async (itemId: string): Promise<unknown> => {
+      const { data, error } = await supabase.rpc('fulfill_item', { item_id: itemId, qty: 1 });
+      if (error) throw error;
+      return data;
+    },
     onMutate: async (itemId) => {
       // Optimistically update the UI before the network call
       await queryClient.cancelQueries({ queryKey: ['orders'] });

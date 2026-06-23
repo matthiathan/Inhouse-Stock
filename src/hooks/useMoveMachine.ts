@@ -7,7 +7,7 @@ export const useMoveMachine = () => {
   return useMutation({
     mutationFn: async ({ machineId, newSectionId }: { machineId: string; newSectionId: number }) => {
       const { data, error } = await supabase
-        .from('machines')
+        .from('fam')
         .update({ section_id: newSectionId })
         .eq('id', machineId);
 
@@ -16,6 +16,7 @@ export const useMoveMachine = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['machines'] });
+      queryClient.invalidateQueries({ queryKey: ['machine'] });
     },
   });
 };

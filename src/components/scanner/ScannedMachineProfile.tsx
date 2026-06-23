@@ -12,32 +12,29 @@ interface ScannedMachineProfileProps {
     'Asset Name': string;
     'Asset Number': string;
     section?: {
+      id: number;
       section_name: string;
     } | null;
   };
 }
 
 export const ScannedMachineProfile: React.FC<ScannedMachineProfileProps> = ({ machine }) => {
-  const [showMoveModal, setShowMoveModal] = useState(false);
   const moveMachineMutation = useMoveMachine();
 
   const { data: sections, isLoading } = useQuery({
     queryKey: ['sections'],
     queryFn: () => sectionRepository.getAll(),
-    enabled: showMoveModal,
   });
 
   const locationName = machine.section?.section_name || 'Client / Off-site';
 
   const handleMove = async (newSectionId: number) => {
     try {
-      // Assuming machine ID is still valid for update
       await moveMachineMutation.mutateAsync({
         machineId: machine.id,
         newSectionId,
       });
       toast.success('Machine moved successfully');
-      setShowMoveModal(false);
     } catch (error) {
       toast.error('Failed to move machine');
     }
@@ -59,48 +56,27 @@ export const ScannedMachineProfile: React.FC<ScannedMachineProfileProps> = ({ ma
         </div>
       </div>
 
-      <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
+      <div className="mt-8 pt-6 border-t border-gray-100">
         <div>
-          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Current Location</label>
-          <p className="mt-1 text-sm font-semibold text-gray-900">{locationName}</p>
-        </div>
-        
-        <button
-          onClick={() => setShowMoveModal(true)}
-          className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
-        >
-          Move Machine
-        </button>
-      </div>
-
-      {showMoveModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-sm">
-            <h4 className="text-md font-semibold mb-4">Select New Location</h4>
-            {isLoading ? (
-              <p className="text-sm text-gray-500">Loading sections...</p>
-            ) : (
-              <div className="space-y-2">
-                {sections?.map((section) => (
-                  <button
-                    key={section.id}
-                    onClick={() => handleMove(parseInt(section.id))}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-lg text-sm transition-colors"
-                  >
-                    {section.section_name}
-                  </button>
-                ))}
-              </div>
-            )}
-            <button
-              onClick={() => setShowMoveModal(false)}
-              className="mt-6 w-full px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg"
+          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Current Location</label>
+          {isLoading ? (
+            <p className="text-sm text-gray-500">Loading locations...</p>
+          ) : (
+            <select
+              value={machine.section?.id || ''}
+              onChange={(e) => handleMove(parseInt(e.target.value))}
+              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-gray-200"
             >
-              Cancel
-            </button>
-          </div>
+              <option value="">Select a location</option>
+              {sections?.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.section_name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

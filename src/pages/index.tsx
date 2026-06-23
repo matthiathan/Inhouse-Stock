@@ -28,6 +28,7 @@ export { AssetDetailsPage } from './AssetDetailsPage';
 export { OrdersPage } from './OrdersPage';
 export { OrderFulfillmentPage } from './OrderFulfillmentPage';
 export { RoutePlannerPage } from './RoutePlannerPage';
+export { DispatchRoutingHub } from './DispatchRoutingHub';
 export { TechRoutePage } from './TechRoutePage';
 export { default as SCLTechClosurePage } from './SCLTechClosurePage';
 export { default as ServiceTasksPage } from './ServiceTasksPage';

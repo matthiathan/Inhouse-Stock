@@ -95,7 +95,6 @@ export default function DashboardLayout() {
       <MobileDrawer 
         isOpen={isMobileMenuOpen} 
         onClose={() => setIsMobileMenuOpen(false)}
-        navItems={navItems}
         user={user}
         role={role}
         isDark={isDark}

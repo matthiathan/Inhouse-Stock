@@ -8,11 +8,14 @@ import { supabase } from '../../lib/supabase';
 interface MobileDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  user: any;
+  role: string | null;
+  isDark: boolean;
+  toggleTheme: () => void;
+  onLogout: () => void;
 }
 
-export default function MobileDrawer({ isOpen, onClose }: MobileDrawerProps) {
-  const { role } = useAuth();
-
+export default function MobileDrawer({ isOpen, onClose, user, role, isDark, toggleTheme, onLogout }: MobileDrawerProps) {
   // Close drawer on escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {

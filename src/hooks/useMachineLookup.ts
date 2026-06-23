@@ -8,17 +8,14 @@ export const useMachineLookup = (qrCode: string | null) => {
       if (!qrCode) return null;
       const { data, error } = await supabase
         .from('fam')
-        .select('*, section(section_name)')
+        .select('*, section(id, section_name)')
         .eq('QR Code', qrCode)
-        .single();
+        .maybeSingle();
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          throw new Error('Machine Not Found');
-        }
         throw error;
       }
-      return data;
+      return { data, isNotFound: !data };
     },
     enabled: !!qrCode,
   });

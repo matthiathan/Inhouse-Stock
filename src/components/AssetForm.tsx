@@ -6,7 +6,7 @@ import { assetSchema, type AssetFormData } from '../lib/assetSchema';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 
-export default function AssetForm() {
+export default function AssetForm({ initialQrCode }: { initialQrCode?: string }) {
   const {
     register,
     handleSubmit,
@@ -16,7 +16,7 @@ export default function AssetForm() {
     resolver: zodResolver(assetSchema),
     defaultValues: {
       serial_number: '',
-      qr_code: '',
+      qr_code: initialQrCode || '',
       machine_model: '',
       installation_date: new Date().toISOString().split('T')[0]
     }
