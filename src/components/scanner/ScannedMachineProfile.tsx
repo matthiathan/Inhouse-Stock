@@ -7,12 +7,10 @@ import { useQuery } from '@tanstack/react-query';
 interface ScannedMachineProfileProps {
   machine: {
     id: string;
-    qr_code: string;
-    serial_number: string;
-    fam?: {
-      asset_name: string;
-      asset_number: string;
-    };
+    'QR Code': string;
+    'Serial#': string;
+    'Asset Name': string;
+    'Asset Number': string;
     section?: {
       section_name: string;
     } | null;
@@ -33,6 +31,7 @@ export const ScannedMachineProfile: React.FC<ScannedMachineProfileProps> = ({ ma
 
   const handleMove = async (newSectionId: number) => {
     try {
+      // Assuming machine ID is still valid for update
       await moveMachineMutation.mutateAsync({
         machineId: machine.id,
         newSectionId,
@@ -50,13 +49,13 @@ export const ScannedMachineProfile: React.FC<ScannedMachineProfileProps> = ({ ma
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <DetailItem label="Asset Name" value={machine.fam?.asset_name || 'N/A'} />
-          <DetailItem label="Asset Number" value={machine.fam?.asset_number || 'N/A'} />
+          <DetailItem label="Asset Name" value={machine['Asset Name'] || 'N/A'} />
+          <DetailItem label="Asset Number" value={machine['Asset Number'] || 'N/A'} />
         </div>
 
         <div className="space-y-4">
-          <DetailItem label="QR Code" value={machine.qr_code} />
-          <DetailItem label="S/N" value={machine.serial_number} />
+          <DetailItem label="QR Code" value={machine['QR Code']} />
+          <DetailItem label="S/N" value={machine['Serial#']} />
         </div>
       </div>
 

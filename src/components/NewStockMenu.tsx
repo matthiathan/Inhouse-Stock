@@ -120,10 +120,10 @@ export function NewStockMenu({ onSuccess, onCancel, initialBarcode = '', existin
     <div className="fixed inset-0 z-50 bg-bg-base md:bg-black/60 md:backdrop-blur-sm flex items-center justify-center p-0 md:p-4 overflow-y-auto">
       <form 
         onSubmit={handleSubmit(onSubmit)} 
-        className="w-full max-w-lg bg-bg-elevated min-h-screen md:min-h-0 md:rounded-2xl shadow-2xl flex flex-col"
+        className="w-full max-w-lg bg-bg-elevated h-screen md:h-[90vh] md:max-h-[800px] md:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
       >
         {/* Header */}
-        <div className="p-4 border-b border-brand-border flex justify-between items-center bg-bg-elevated sticky top-0 z-10">
+        <div className="p-4 border-b border-brand-border flex justify-between items-center bg-bg-elevated">
           <div>
             <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
               <Package className="text-brand-gold" size={24} /> 
@@ -140,7 +140,7 @@ export function NewStockMenu({ onSuccess, onCancel, initialBarcode = '', existin
           </button>
         </div>
 
-        <div className="p-4 space-y-6 flex-grow">
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {/* Identity Card */}
           <div className="space-y-4">
             <div className="bg-bg-base p-4 rounded-xl border border-brand-border shadow-sm">
@@ -265,7 +265,7 @@ export function NewStockMenu({ onSuccess, onCancel, initialBarcode = '', existin
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-brand-border bg-bg-elevated flex gap-3 sticky bottom-0">
+        <div className="p-4 border-t border-brand-border bg-bg-elevated flex gap-3">
           <button 
             type="button" 
             onClick={onCancel}
