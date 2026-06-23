@@ -13,6 +13,12 @@ export class TicketRepository extends BaseRepository<MaintenanceTicket> {
     return data as MaintenanceTicket[];
   }
 
+  async getById(id: string): Promise<MaintenanceTicket | null> {
+    const { data, error } = await supabase.from(this.tableName).select('*, unified_customers(*)').eq('id', id).single();
+    if (error) throw error;
+    return data as MaintenanceTicket;
+  }
+
   async getOpenTickets(): Promise<MaintenanceTicket[] | null> {
     const { data, error } = await supabase.from(this.tableName).select('*').neq('status', 'Closed');
     if (error) throw error;

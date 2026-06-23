@@ -12,22 +12,43 @@
   --color-dallmayr-cream: #FAF6F0;
   --color-dallmayr-cream-light: #FDFBF7;
 
-  /* Theme semantic maps */
+  /* Premium Executive Semantic Palette */
   --color-brand-gold: #C5A059;
-  --color-brand-border: #E5E7EB;
-  --color-bg-base: #FAF9F6;
+  --color-brand-accent: #171717;
+  
+  --color-border-subtle: #E5E7EB;
+  --color-border-hover: #D1D5DB;
+
+  --color-bg-base: #F9FAFB;
   --color-bg-elevated: #FFFFFF;
-  --color-text-primary: #061B30;
-  --color-text-secondary: #5C6E82;
+  --color-bg-canvas: #FFFFFF;
+
+  --color-text-primary: #111827;
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #9CA3AF;
+  
+  /* Subtle Executive Shadows */
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-elevated: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }
 
 .dark {
-  --color-brand-gold: #DFBF7D;
-  --color-brand-border: #142F4B;
-  --color-bg-base: #061B30;
-  --color-bg-elevated: #0B243B;
-  --color-text-primary: #FAF6F0;
-  --color-text-secondary: #8EACC4;
+  --color-brand-gold: #C5A059;
+  --color-brand-accent: #FAFAFA;
+  
+  --color-border-subtle: #1F2937;
+  --color-border-hover: #374151;
+  
+  --color-bg-base: #030712;
+  --color-bg-elevated: #0f172a;
+  --color-bg-canvas: #030712;
+  
+  --color-text-primary: #F9FAFB;
+  --color-text-secondary: #9CA3AF;
+  --color-text-tertiary: #6B7280;
+  
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-elevated: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
 }
 
 /* Custom class override for SVG logo text dynamic color */

@@ -1,7 +1,7 @@
 // Renaming file to .tsx to support JSX
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, isConfigured } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -76,6 +76,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    if (!isConfigured) {
+      setLoading(false);
+      return;
+    }
     let active = true;
 
     const handleSessionChange = async (currentSession: Session | null) => {

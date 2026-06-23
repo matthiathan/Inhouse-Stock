@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { sclRepository } from '../features/dispatch/repository';
+import { ticketRepository } from '../features/tickets/repository';
 
 const DB_NAME = 'OfflineSyncDB';
 const DB_VERSION = 1;
@@ -72,7 +73,7 @@ export const processOfflineSyncQueue = async (queryClient?: any) => {
         const res = await fetch(task.photoBase64);
         const blob = await res.blob();
         
-        const fileName = `${task.sclId}-${Date.now()}.jpg`;
+        const fileName = `${task.ticketId || task.sclId}-${Date.now()}.jpg`;
         const { error: uploadError } = await supabase.storage
           .from('maintenance-photos')
           .upload(fileName, blob, { contentType: blob.type });
@@ -83,22 +84,32 @@ export const processOfflineSyncQueue = async (queryClient?: any) => {
         photoUrl = urlData.publicUrl;
       }
 
-      // 2. Update DB
-      await sclRepository.update(task.sclId, {
-        photo_url: photoUrl,
-        closed_remarks: task.notes,
-        serial_number: task.serial_number,
-        qrcode: task.qrcode,
-        current_status: task.status,
-        status: task.status,
-        ...(task.status === 'Closed' ? { closed_date: new Date().toISOString() } : {})
-      } as any);
+      // 2. Update DB based on task type
+      if (task.isMaintenanceTicket) {
+         await ticketRepository.update(task.ticketId, {
+            photo_url: photoUrl,
+            resolution_notes: task.notes,
+            asset_id: task.asset_id,
+            status: task.status,
+            ...(task.status === 'Completed' || task.status === 'Closed' ? { completed_at: new Date().toISOString() } : {})
+         });
+      } else {
+         await sclRepository.update(task.sclId, {
+            photo_url: photoUrl,
+            closed_remarks: task.notes,
+            serial_number: task.serial_number,
+            qrcode: task.qrcode,
+            current_status: task.status,
+            status: task.status,
+            ...(task.status === 'Closed' ? { closed_date: new Date().toISOString() } : {})
+         } as any);
+      }
 
       // 3. Delete from queue
       await deleteQueuedTask(task.id);
       successCount++;
     } catch (err) {
-      console.error('Failed to sync task:', task.sclId, err);
+      console.error('Failed to sync task:', task.ticketId || task.sclId, err);
     }
   }
 
@@ -106,6 +117,8 @@ export const processOfflineSyncQueue = async (queryClient?: any) => {
     toast.success(`Synced ${successCount} offline tasks to server!`);
     if (queryClient) {
       queryClient.invalidateQueries({ queryKey: ['sclTasks'] });
+      queryClient.invalidateQueries({ queryKey: ['techRoute'] });
     }
   }
 };
+

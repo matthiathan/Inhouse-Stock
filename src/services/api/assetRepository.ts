@@ -8,37 +8,41 @@ export class AssetRepository extends BaseRepository<Machine> {
     super('machines');
   }
 
-  override async getAll(section?: string): Promise<Machine[] | null> {
+  override async getAll(sectionId?: string): Promise<Machine[] | null> {
     let query = supabase.from(this.tableName).select('*');
-    if (section) {
-      query = query.eq('section', section);
+    if (sectionId) {
+      query = query.eq('section_id', sectionId);
     }
     const { data, error } = await query;
     if (error) throw error;
     return data as Machine[];
   }
 
-  override async create(item: Omit<Machine, 'id' | 'created_at'>): Promise<Machine | null> {
-    const validation = machineSchema.partial().safeParse(item);
-    if (!validation.success) {
-      throw new RepositoryValidationError(
-        'Validation Guard: Failed to create machine asset due to invalid input fields.',
-        validation.error.format()
-      );
+  async getAssetDetails(id: string): Promise<any | null> {
+    const { data, error } = await supabase
+      .from('v_machine_details')
+      .select('*')
+      .eq('machine_id', id)
+      .single();
+    if (error) {
+      console.error(`Asset details for ID ${id} not found.`);
+      return null;
     }
+    // Also inject the raw section_id for the edit modal
+    const { data: raw } = await supabase.from('machines').select('section_id').eq('id', id).single();
+    if (raw) {
+       data.section_id = raw.section_id;
+    }
+    return data;
+  }
+
+  override async create(item: Omit<Machine, 'id' | 'created_at'>): Promise<Machine | null> {
     return super.create(item);
   }
 
   override async update(id: string, item: Partial<Machine>): Promise<Machine | null> {
     if (!id || typeof id !== 'string') {
       throw new RepositoryValidationError('Validation Guard: Asset ID must be a non-empty string.');
-    }
-    const validation = machineSchema.partial().safeParse(item);
-    if (!validation.success) {
-      throw new RepositoryValidationError(
-        'Validation Guard: Failed to update machine asset due to invalid update fields.',
-        validation.error.format()
-      );
     }
     return super.update(id, item);
   }
@@ -56,21 +60,14 @@ export class AssetRepository extends BaseRepository<Machine> {
     return data as Machine;
   }
 
-  async updateSection(id: string, newSectionName: string): Promise<Machine | null> {
+  async updateSection(id: string, sectionId: string | null): Promise<Machine | null> {
     if (!id || typeof id !== 'string') {
       throw new RepositoryValidationError('Validation Guard: Asset ID must be a non-empty string.');
-    }
-    const validation = machineSchema.shape.section.safeParse(newSectionName);
-    if (!validation.success) {
-      throw new RepositoryValidationError(
-        `Validation Guard: Failed to update section to '${newSectionName}' due to invalid location format.`,
-        validation.error.format()
-      );
     }
 
     const { data, error } = await supabase
       .from(this.tableName)
-      .update({ section: newSectionName })
+      .update({ section_id: sectionId })
       .eq('id', id)
       .select()
       .single();
@@ -80,14 +77,14 @@ export class AssetRepository extends BaseRepository<Machine> {
 
   async getMachineModels(): Promise<string[]> {
     const { data, error } = await supabase
-      .from('machine_types')
-      .select('type_name');
+      .from('fam')
+      .select('model_name');
     
     if (error) {
       console.error("Error fetching machine types:", error);
       return [];
     }
-    return (data || []).map(row => row.type_name);
+    return (data || []).map(row => row.model_name);
   }
 }
 

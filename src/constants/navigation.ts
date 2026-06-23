@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export const ALL_NAV_ITEMS = [
-  { name: 'Stock', path: '/stock', icon: Package, roles: ['admin', 'ops_manager', 'warehouse'] },
+  { name: 'Warehouse', path: '/warehouse', icon: Package, roles: ['admin', 'ops_manager', 'warehouse'] },
   { name: 'Orders', path: '/orders', icon: ClipboardList, roles: ['admin', 'ops_manager', 'warehouse'] },
   { name: 'Fulfillment', path: '/fulfillment', icon: ClipboardList, roles: ['admin', 'ops_manager', 'warehouse'] },
   { name: 'Dispatch & Routing', path: '/dispatch', icon: Map, roles: ['admin', 'ops_manager'] },

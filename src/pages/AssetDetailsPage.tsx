@@ -1,503 +1,390 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { sectionRepository } from '../services/api/sectionRepository';
 import { assetRepository } from '../services/api/assetRepository';
-import { ticketRepository } from '../features/tickets/repository';
-import { Machine, Section } from '../types';
-import { updateAssetSection } from '../api/assetApi';
-import { createMaintenanceTicket, closeMaintenanceTicket } from '../api/maintenance';
-import { uploadAssetPhoto } from '../lib/storage';
+import { supabase } from '../lib/supabase';
+import { VMachineDetails, Section } from '../types';
 import { toast } from 'sonner';
-import { Html5QrcodeScanner } from 'html5-qrcode';
 import { 
   Shield, 
-  Wrench, 
   MapPin, 
-  QrCode, 
-  Activity, 
-  Calendar, 
   FileText, 
   ChevronLeft, 
-  Settings, 
   Plus, 
   CheckCircle2, 
   AlertCircle,
   Truck,
-  Camera
+  History,
+  Building,
+  Save,
+  X
 } from 'lucide-react';
 
 export function AssetDetailsPage() {
     const { id } = useParams<{ id: string }>();
-    const { can_update_location, role } = useAuth(); // Extract role and permissions
-    const [asset, setAsset] = useState<Machine | null>(null);
+    const navigate = useNavigate();
+    const { role } = useAuth(); 
+    const [asset, setAsset] = useState<VMachineDetails | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     
-    // Ticket handling states
-    const [tickets, setTickets] = useState<any[]>([]);
+    // Change Section Workflow
+    const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
+    const [sections, setSections] = useState<any[]>([]);
+    const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+    const [isSavingSection, setIsSavingSection] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
+
+    // Maintenance Ticket Workflow
     const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
-    const [newTicketIssue, setNewTicketIssue] = useState('');
-    const [submittingTicket, setSubmittingTicket] = useState(false);
+    const [ticketIssue, setTicketIssue] = useState('');
+    const [isSavingTicket, setIsSavingTicket] = useState(false);
 
-    // Ticket resolution state
-    const [isResolveModalOpen, setIsResolveModalOpen] = useState(false);
-    const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-    const [resolutionNotes, setResolutionNotes] = useState('');
-    const [submittingResolution, setSubmittingResolution] = useState(false);
-    const [qrVerified, setQrVerified] = useState(false);
-    const [scannedQr, setScannedQr] = useState<string | null>(null);
-    const [photoFile, setPhotoFile] = useState<File | null>(null);
-    const [isScanning, setIsScanning] = useState(false);
-    
-    const [sections, setSections] = useState<Section[]>([]);
-    const [selectedSection, setSelectedSection] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [searchParams] = useSearchParams();
-    const [uploadingPhoto, setUploadingPhoto] = useState(false);
-    const [pendingMachinePhoto, setPendingMachinePhoto] = useState<File | null>(null);
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, assetId: string) => {
-        if (e.target.files && e.target.files[0]) {
-            setUploadingPhoto(true);
-            try {
-                const publicUrl = await uploadAssetPhoto(e.target.files[0], assetId);
-                
-                // Update database record with the new URL
-                await assetRepository.update(assetId, { photo_url: publicUrl } as any);
-                
-                // Update local state
-                setAsset(prev => prev ? { ...prev, photo_url: publicUrl } as any : null);
-                toast.success('Photo uploaded successfully');
-            } catch (err: any) {
-                toast.error('Upload failed: ' + err.message);
-            } finally {
-                setUploadingPhoto(false);
-            }
-        }
-    };
-
-    const fetchTickets = async () => {
-        if (!id) return;
-        try {
-            const ticketData = await ticketRepository.getTicketsByMachineId(id);
-            setTickets(ticketData || []);
-        } catch (err: any) {
-            console.error("Failed to fetch tickets", err);
-        }
-    };
-
-    const actionParam = searchParams.get('action');
+    // Optional history view
+    const [serviceLogs, setServiceLogs] = useState<any[]>([]);
 
     useEffect(() => {
-        const fetchAssetData = async () => {
-            if (!id) return;
-            setLoading(true);
-            try {
-                const machineData = await assetRepository.getById(id);
-                setAsset(machineData as Machine);
-
-                await fetchTickets();
-
-                if (actionParam === 'update_section') setIsModalOpen(true);
-                if (actionParam === 'log_maintenance') setIsTicketModalOpen(true);
-            } catch (err: any) {
-                toast.error("Error loading asset details: " + err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
+        if (!id) return;
         fetchAssetData();
-    }, [id, actionParam]);
+        fetchServiceHistory(id);
+    }, [id]);
 
-    // Create ticket submission handler (Admins & Ops Managers)
-    const handleSubmitTicket = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!id || !newTicketIssue.trim()) return;
-      setSubmittingTicket(true);
-      try {
-        await createMaintenanceTicket(id, newTicketIssue);
-        toast.success("Maintenance ticket created successfully");
-        setNewTicketIssue('');
-        setIsTicketModalOpen(false);
-        await fetchTickets();
-      } catch (err: any) {
-        toast.error("Failed to create ticket: " + err.message);
-      } finally {
-        setSubmittingTicket(false);
-      }
-    };
-
-    // Close ticket handler (Technicians / Techs)
-    const handleResolveTicket = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedTicketId || !resolutionNotes.trim() || !qrVerified || !photoFile) return;
-        setSubmittingResolution(true);
+    const fetchAssetData = async () => {
+        setLoading(true);
         try {
-            await closeMaintenanceTicket(selectedTicketId, resolutionNotes, photoFile);
-            toast.success("Service ticket resolved/closed successfully");
-            setResolutionNotes('');
-            setPhotoFile(null);
-            setQrVerified(false);
-            setScannedQr(null);
-            setSelectedTicketId(null);
-            setIsResolveModalOpen(false);
-            await fetchTickets();
+            const data = await assetRepository.getAssetDetails(id!);
+            if (data) {
+                setAsset(data);
+                setSelectedSectionId(data.section_id);
+            }
         } catch (err: any) {
-            toast.error("Failed to close ticket: " + err.message);
+            toast.error("Error loading asset details: " + err.message);
         } finally {
-            setSubmittingResolution(false);
+            setLoading(false);
         }
     };
 
-    const fetchSections = async () => {
+    const fetchServiceHistory = async (machineId: string) => {
         try {
-            const data = await sectionRepository.getAll();
+            const { data } = await supabase
+              .from('service_call_logs')
+              .select('id, created_at, status, resolution_notes, technician:technician_id(full_name)')
+              .eq('machine_id', machineId)
+              .order('created_at', { ascending: false });
+            if (data) setServiceLogs(data);
+        } catch (err) {
+            console.error("Failed to load service history");
+        }
+    };
+
+    const loadSections = async () => {
+        if (!asset?.customer_id && !asset) return;
+        // The view doesn't have customer_id natively unless we fetch from machines. Let's do a direct look
+        // Wait, v_machine_details doesn't have customer_id. We fetch sections by global or maybe via section table directly.
+        try {
+            const { data, error } = await supabase.from('section').select('id, section_name, customer_id');
+            if (error) throw error;
             setSections(data || []);
-            if (asset && asset.section) setSelectedSection(asset.section);
-            else if (data && data.length > 0) setSelectedSection(data[0].section_name);
         } catch (err: any) {
             toast.error("Could not load sections: " + err.message);
         }
     };
 
-    const handleSave = async () => {
-        if (!asset || !selectedSection) return;
-        setSaving(true);
+    const handleOpenSectionModal = async () => {
+        setIsSectionModalOpen(true);
+        await loadSections();
+    };
+
+    const performSectionChange = async () => {
+        if (!asset || selectedSectionId === asset.section_id) {
+            setIsSectionModalOpen(false);
+            setShowConfirm(false);
+            return;
+        }
+
+        const previousSectionId = asset.section_id;
+        const previousSectionName = asset.section_name;
+        const targetSection = sections.find(s => s.id === selectedSectionId);
+
+        // Optimistic UI Update
+        setAsset(prev => prev ? { 
+            ...prev, 
+            section_id: selectedSectionId,
+            section_name: targetSection?.section_name || ''
+        } : null);
+
+        setIsSavingSection(true);
         try {
-            let photoUrl = asset.photo_url;
-
-            // If a new file was captured, upload it first
-            if (pendingMachinePhoto) {
-                try {
-                    photoUrl = await uploadAssetPhoto(pendingMachinePhoto, asset.id);
-                } catch (error) {
-                    console.error("Upload failed", error);
-                    toast.error("Failed to upload image. Please try again.");
-                    setSaving(false);
-                    return; // Stop the save process
-                }
-            }
-
-            // Proceed to save the record
-            await updateAssetSection(asset.id, selectedSection);
+            await assetRepository.updateSection(asset.machine_id, selectedSectionId);
             
-            // If photo was updated, also update the photo_url field
-            if (photoUrl !== asset.photo_url) {
-                await assetRepository.update(asset.id, { photo_url: photoUrl } as any);
-            }
+            // Audit Log
+            await supabase.from('service_call_logs').insert({
+                machine_id: asset.machine_id,
+                technician_id: (await supabase.auth.getUser()).data.user?.id,
+                narration: `Moved machine from ${previousSectionName || 'Unknown'} to ${targetSection?.section_name || 'Unknown'}`,
+                status: 'Approved',
+                region: 'NATIONAL' // Needs actual user region but fallback for now
+            } as any);
 
-            setAsset(prev => prev ? { ...prev, section: selectedSection, photo_url: photoUrl } : null);
-            localStorage.removeItem('cached_assets');
-            toast.success("Asset updated successfully!");
-            setIsModalOpen(false);
-            setPendingMachinePhoto(null);
+            toast.success("Section updated successfully");
+            setIsSectionModalOpen(false);
+            setShowConfirm(false);
         } catch (err: any) {
-            toast.error("Database update failed.");
+            // Rollback
+            setAsset(prev => prev ? { 
+                ...prev, 
+                section_id: previousSectionId,
+                section_name: previousSectionName
+            } : null);
+            toast.error("Failed to update section: " + err.message);
         } finally {
-            setSaving(false);
+            setIsSavingSection(false);
         }
     };
 
-    if (loading) return <div className="p-4 md:p-8 animate-fade-in text-text-primary">Loading asset details...</div>;
-    if (!asset) return <div className="p-4 md:p-8 text-text-primary">Asset not found</div>;
+    const handleCreateTicket = async () => {
+        if (!ticketIssue.trim() || !asset) return;
+        setIsSavingTicket(true);
+        try {
+            const userRes = await supabase.auth.getUser();
+            const userId = userRes.data.user?.id;
+            
+            await supabase.from('maintenance_tickets').insert({
+                ticket_number: `TKT-${Math.floor(Math.random() * 100000)}`,
+                machine_id: asset.machine_id,
+                customer_id: asset.customer_id,
+                issue_description: ticketIssue,
+                reported_by: userId,
+                priority: 'High',
+                status: 'Open'
+            });
 
-    const isAuthorizedToLog = role === 'admin' || role === 'ops_manager';
-    const isAuthorizedToClose = role === 'tech' || role === 'admin';
+            toast.success("Maintenance Ticket Created");
+            setTicketIssue('');
+            setIsTicketModalOpen(false);
+            // Refresh logs/history
+            fetchServiceHistory(asset.machine_id);
+        } catch (err: any) {
+            toast.error("Failed to create ticket: " + err.message);
+        } finally {
+            setIsSavingTicket(false);
+        }
+    };
+
+    if (loading) return <div className="p-8 text-text-secondary animate-pulse">Loading enterprise asset data...</div>;
+    if (!asset) return <div className="p-8 text-status-critical bg-status-critical/10 rounded-lg max-w-lg mx-auto mt-8">Asset could not be located in registry.</div>;
 
     return (
-        <div className="p-4 md:p-8 max-w-4xl relative space-y-6 font-sans">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-              <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">{asset.asset_name}</h1>
-              {isAuthorizedToLog && (
+        <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-8 font-sans">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-divider pb-6">
+              <div>
+                <button onClick={() => navigate(-1)} className="flex items-center text-text-secondary hover:text-text-primary text-sm font-medium mb-3 transition-colors">
+                  <ChevronLeft size={16} className="mr-1" /> Back
+                </button>
+                <h1 className="text-3xl font-bold text-text-primary tracking-tight">{asset.asset_name}</h1>
+                <p className="text-text-secondary mt-1 tracking-wide text-sm uppercase">Asset Registry Core</p>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={handleOpenSectionModal}
+                  className="bg-bg-subtle hover:bg-bg-elevated border border-divider text-text-primary font-medium text-sm py-2 px-4 rounded-lg transition-colors flex items-center shadow-sm"
+                >
+                  <MapPin size={16} className="mr-2" /> Change Section
+                </button>
                 <button 
                   onClick={() => setIsTicketModalOpen(true)}
-                  className="bg-brand-gold hover:bg-brand-gold/90 text-white font-medium text-sm py-2.5 px-4 rounded-lg transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5 self-start min-h-[44px]"
+                  className="bg-brand-gold hover:bg-brand-gold/90 text-white font-medium text-sm py-2 px-4 rounded-lg transition-colors shadow-sm flex items-center"
                 >
-                  🛠️ Create Service Ticket
+                  <Shield size={16} className="mr-2" /> Issue Maintenance Ticket
                 </button>
-              )}
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-                {/* Identifiers Card */}
-                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between">
-                    <div>
-                        <h3 className="font-bold text-text-primary mb-3">Identifiers</h3>
-                        <p className="text-text-secondary text-sm mb-1.5">S/N: <span className="text-text-primary font-mono">{asset.serial_number}</span></p>
-                        <p className="text-text-secondary text-sm">QR Code: <span className="text-text-primary font-mono">{asset.qr_code}</span></p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                
+                {/* Hardware Identity Card */}
+                <div className="bg-bg-elevated p-6 rounded-xl border border-divider shadow-sm">
+                    <h3 className="font-bold text-text-primary mb-4 flex items-center gap-2"><Scan size={18} className="text-text-tertiary" /> Hardware Identity</h3>
+                    <div className="space-y-3">
+                        <div>
+                            <p className="text-text-tertiary text-xs font-semibold uppercase tracking-wider mb-1">Serial Number</p>
+                            <p className="text-text-primary font-mono bg-bg-base px-3 py-2 rounded-md inline-block border border-divider">{asset.serial_number}</p>
+                        </div>
+                        <div>
+                            <p className="text-text-tertiary text-xs font-semibold uppercase tracking-wider mb-1">QR Anchor</p>
+                            <p className="text-text-primary font-mono bg-bg-base px-3 py-2 rounded-md inline-block border border-divider">{asset.qr_code}</p>
+                        </div>
+                        <div>
+                           <p className="text-text-tertiary text-xs font-semibold uppercase tracking-wider mb-1">Machine Status</p>
+                           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${asset.machine_status === 'Operational' ? 'bg-status-success/10 text-status-success' : 'bg-status-critical/10 text-status-critical'}`}>
+                               {asset.machine_status || 'Operational'}
+                           </span>
+                        </div>
                     </div>
                 </div>
                 
-                {/* Section / Location Card */}
-                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between gap-4">
+                {/* Placement & Ownership Card */}
+                <div className="bg-bg-elevated p-6 rounded-xl border border-divider shadow-sm flex flex-col justify-between">
                     <div>
-                        <h3 className="font-bold text-text-primary mb-3">Section Details</h3>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2 pb-2">
-                            <p className="text-text-secondary text-sm">Section: <span className="text-text-primary font-medium">{asset.section}</span></p>
-                            {!can_update_location ? (
-                                <button 
-                                    className="text-text-secondary/50 text-sm font-medium text-left cursor-not-allowed min-h-[32px] py-1 flex items-center gap-1.5" 
-                                    title="Permission restricted"
-                                    disabled
-                                >
-                                    Change Section <span className="text-[10px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Blocked</span>
-                                </button>
-                            ) : (
-                                <button onClick={() => { setIsModalOpen(true); fetchSections(); }} className="text-brand-gold text-sm font-medium hover:underline text-left cursor-pointer min-h-[32px] py-1">Change Section</button>
-                            )}
+                        <h3 className="font-bold text-text-primary mb-4 flex items-center gap-2"><Building size={18} className="text-text-tertiary" /> Placement</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-text-tertiary text-xs font-semibold uppercase tracking-wider mb-1">Customer / Region</p>
+                                <p className="text-text-primary font-medium">{asset.customer_name || 'Unassigned Customer'} <span className="text-text-secondary text-sm">({asset.customer_region || 'No Region'})</span></p>
+                                {asset.customer_name && (
+                                   <button 
+                                      onClick={() => {
+                                        if (asset.customer_code) navigate(`/customers/${asset.customer_code}`);
+                                        else toast.info('Detailed customer view not accessible');
+                                      }}
+                                      className="text-brand-gold text-xs font-medium hover:underline mt-1 bg-transparent border-0 cursor-pointer p-0"
+                                   >
+                                      View Customer Record
+                                   </button>
+                                )}
+                            </div>
+                            <div>
+                                <p className="text-text-tertiary text-xs font-semibold uppercase tracking-wider mb-1">Assigned Section</p>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-text-primary font-medium bg-bg-base px-3 py-2 border border-divider rounded-md flex-1 break-words">{asset.section_name || 'No Section Assigned'}</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Asset Photo Card */}
-                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm flex flex-col justify-between gap-4">
-                    <div>
-                        <h3 className="font-bold text-text-primary mb-3 flex items-center gap-1.5">
-                            <Camera size={16} className="text-brand-gold" /> Asset Photo
-                        </h3>
-                        {uploadingPhoto ? (
-                            <div className="border border-brand-gold/30 rounded-lg h-36 flex flex-col items-center justify-center bg-bg-base text-brand-gold text-xs">
-                                <span className="animate-spin mb-2 text-lg">⏳</span>
-                                <span>Uploading image...</span>
-                            </div>
-                        ) : (asset as any).photo_url ? (
-                            <div className="relative group rounded-lg overflow-hidden border border-brand-border h-36 bg-bg-base flex items-center justify-center shadow-inner">
-                                <img src={(asset as any).photo_url} alt={asset.asset_name} className="h-full w-full object-cover" />
-                            </div>
-                        ) : (
-                            <div className="border border-dashed border-brand-border rounded-lg h-36 flex flex-col items-center justify-center bg-bg-base text-text-secondary text-xs">
-                                <Camera size={24} className="mb-2 text-text-secondary/50" />
-                                <span>No Asset Photograph</span>
-                            </div>
-                        )}
-                        <div className="mt-3">
-                            <label className="block text-[10px] uppercase font-bold text-text-secondary tracking-wider mb-1">Upload New Photo</label>
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              capture="environment" 
-                              onChange={(e) => handleFileChange(e, asset.id)}
-                              className="block w-full text-xs text-text-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-brand-gold file:text-white file:text-xs file:font-semibold hover:file:bg-brand-gold/90 transition-all cursor-pointer"
-                            />
+                {/* Technical Meta Card */}
+                <div className="bg-bg-elevated p-6 rounded-xl border border-divider shadow-sm lg:col-span-1 md:col-span-2">
+                    <h3 className="font-bold text-text-primary mb-4 flex items-center gap-2"><FileText size={18} className="text-text-tertiary" /> Specification (FAM)</h3>
+                    <div className="space-y-4">
+                        <div>
+                            <p className="text-text-tertiary text-xs font-semibold uppercase tracking-wider mb-1">Model / Make</p>
+                            <p className="text-text-primary font-medium">{asset.model_name || 'N/A'} <span className="text-text-secondary text-sm ml-1">by {asset.manufacturer || 'Unknown'}</span></p>
+                        </div>
+                        <div>
+                            <p className="text-text-tertiary text-xs font-semibold uppercase tracking-wider mb-1">Category</p>
+                            <p className="text-text-primary">{asset.category || 'Standard'}</p>
+                        </div>
+                        <div>
+                            <p className="text-text-tertiary text-xs font-semibold uppercase tracking-wider mb-1">Contract Cover</p>
+                            <p className="text-text-primary font-mono text-sm">{asset.contract_number ? `${asset.contract_number} (${asset.contract_type})` : 'No Active SLA'}</p>
+                            {asset.contract_number && (
+                               <button onClick={() => toast.info('Contract Module Integration Pending')} className="text-brand-gold text-xs font-medium hover:underline mt-1 cursor-pointer bg-transparent border-0 p-0">Review Terms</button>
+                            )}
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Service Logs / Tickets History Section */}
-            <section className="bg-bg-elevated p-6 rounded-xl border border-brand-border shadow-sm">
-              <h2 className="font-bold text-text-primary mb-4 text-base border-b border-brand-border pb-2">Active Service & Maintenance Tickets</h2>
-              {tickets.length === 0 ? (
-                <p className="text-sm text-text-secondary text-center py-6">No service tickets logged for this equipment asset.</p>
-              ) : (
-                <div className="space-y-3">
-                  {tickets.map(ticket => (
-                    <div key={ticket.id} className="p-4 bg-bg-base border border-brand-border rounded-lg flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs">
-                      <div className="space-y-1">
-                        <p className="text-text-primary font-semibold text-sm">{ticket.issue_description}</p>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-text-secondary font-mono">
-                            <span>Opened: {new Date(ticket.created_at).toLocaleDateString()}</span>
-                            {ticket.resolved_at && (
-                                <span>Closed: {new Date(ticket.resolved_at).toLocaleDateString()}</span>
+            {/* Service History Pane */}
+            <div className="bg-bg-elevated border border-divider rounded-xl overflow-hidden shadow-sm mt-8">
+                <div className="px-6 py-4 border-b border-divider flex items-center justify-between bg-bg-subtle">
+                    <h3 className="font-bold text-text-primary flex items-center gap-2"><History size={18} className="text-text-tertiary"/> Maintenance Ledger</h3>
+                    <span className="text-xs font-bold font-mono bg-bg-base border border-divider text-text-secondary px-2 py-1 rounded">{serviceLogs.length} Records</span>
+                </div>
+                {serviceLogs.length > 0 ? (
+                    <div className="divide-y divide-divider flex flex-col">
+                        {serviceLogs.map((log) => (
+                            <div key={log.id} className="p-6 transition-colors hover:bg-bg-subtle/50">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div>
+                                        <p className="text-sm font-semibold text-text-primary">{(log.technician as any)?.full_name || 'System Auto-Audit'}</p>
+                                        <p className="text-xs text-text-secondary font-mono mt-0.5">{new Date(log.created_at).toLocaleString()}</p>
+                                    </div>
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-bg-base border border-divider text-text-secondary">
+                                        {log.status}
+                                    </span>
+                                </div>
+                                <p className="text-sm text-text-primary mt-2">{log.resolution_notes || log.narration || "No resolution details provided."}</p>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="p-12 text-center text-text-secondary flex flex-col items-center justify-center">
+                        <History size={32} className="text-divider mb-4" />
+                        <p className="font-medium text-text-primary">Pristine Record</p>
+                        <p className="text-sm mt-1">No service anomalies or tickets recorded for this asset.</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Section Modal Workflow */}
+            {isSectionModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-bg-elevated w-full max-w-md rounded-2xl shadow-2xl border border-divider overflow-hidden flex flex-col">
+                        <div className="px-6 py-4 border-b border-divider flex items-center justify-between bg-bg-subtle">
+                            <h3 className="font-bold text-text-primary">Transfer Section</h3>
+                            <button onClick={() => setIsSectionModalOpen(false)} className="text-text-tertiary hover:text-text-primary"><X size={20} /></button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto max-h-[60vh]">
+                            {!showConfirm ? (
+                                <div className="space-y-4">
+                                    <label className="block text-sm font-medium text-text-secondary">Select Destination Section</label>
+                                    <select 
+                                        className="w-full bg-bg-base border border-divider rounded-lg p-3 text-text-primary focus:border-brand-gold focus:ring-1 focus:ring-brand-gold appearance-none"
+                                        value={selectedSectionId || ''}
+                                        onChange={(e) => setSelectedSectionId(e.target.value)}
+                                    >
+                                        <option value="" disabled>-- Select New Location --</option>
+                                        {sections.map(s => (
+                                            <option key={s.id} value={s.id}>{s.section_name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            ) : (
+                                <div className="bg-status-warning/10 border border-status-warning/20 p-4 rounded-lg">
+                                    <h4 className="text-status-warning font-bold flex items-center gap-2 mb-2"><AlertCircle size={18}/> Confirm Transfer</h4>
+                                    <p className="text-sm text-text-primary">
+                                        You are moving <strong>{asset.serial_number}</strong> to a new section. This will trigger an automated audit log entry under your technician ID.
+                                    </p>
+                                </div>
                             )}
                         </div>
-                        {ticket.resolution_notes && (
-                            <div className="mt-2 p-2.5 bg-bg-elevated/50 border border-brand-border/40 rounded-md text-xs">
-                                <span className="block font-bold text-text-secondary uppercase text-[9px] mb-0.5">Resolution Notes:</span>
-                                <p className="text-text-primary">{ticket.resolution_notes}</p>
-                            </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                        <span className={`px-2.5 py-1 font-bold rounded text-[10px] uppercase tracking-wider ${
-                            ticket.status === 'Resolved' 
-                              ? 'bg-emerald-500/10 text-emerald-500' 
-                              : 'bg-amber-500/10 text-amber-500'
-                        }`}>
-                            {ticket.status}
-                        </span>
-                        {ticket.status !== 'Resolved' && isAuthorizedToClose && (
-                            <button 
-                                onClick={() => { setSelectedTicketId(ticket.id); setIsResolveModalOpen(true); }}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs py-1.5 px-3 rounded transition-colors cursor-pointer shadow-sm"
-                            >
-                                ✔️ Close Ticket
-                            </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Modal for adding a ticket (Admins / Ops Managers) */}
-            {isTicketModalOpen && (
-              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-100">
-                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl space-y-4">
-                  <header>
-                    <h2 className="text-lg font-bold text-text-primary">Create Service Ticket</h2>
-                    <p className="text-xs text-text-secondary">Log a failure, corrective action or maintenance requirement.</p>
-                  </header>
-                  <form onSubmit={handleSubmitTicket} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-text-secondary mb-1">Issue Details / Notes *</label>
-                      <textarea 
-                        required
-                        rows={3}
-                        placeholder="Describe technical checks, maintenance or issues..."
-                        value={newTicketIssue} 
-                        onChange={(e) => setNewTicketIssue(e.target.value)}
-                        className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm resize-none"
-                      />
-                    </div>
-                    <div className="flex justify-end gap-2 pt-2">
-                      <button type="button" onClick={() => setIsTicketModalOpen(false)} className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-base rounded-lg transition-colors cursor-pointer min-h-[44px]">Cancel</button>
-                      <button type="submit" disabled={submittingTicket} className="bg-brand-gold text-white px-5 py-2 rounded-lg font-medium text-sm hover:bg-brand-gold/90 transition-colors flex items-center justify-center min-h-[44px] cursor-pointer">
-                        {submittingTicket ? 'Saving...' : 'Save Ticket'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* Modal for closing a ticket (Technicians) */}
-            {isResolveModalOpen && (
-              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-100">
-                <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl space-y-4">
-                  <header>
-                    <h2 className="text-lg font-bold text-text-primary">Close Maintenance Ticket</h2>
-                    <p className="text-xs text-text-secondary">Verify machinery and upload evidence to finalize.</p>
-                  </header>
-                  <form onSubmit={handleResolveTicket} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-text-secondary mb-1">Resolution Details *</label>
-                      <textarea 
-                        required
-                        rows={2}
-                        placeholder="Resolution actions..."
-                        value={resolutionNotes} 
-                        onChange={(e) => setResolutionNotes(e.target.value)}
-                        className="w-full p-2.5 border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm resize-none"
-                      />
-                    </div>
-                    
-                    {/* QR Verification Step */}
-                    {!qrVerified && (
-                        <div className="space-y-2">
-                            <label className="block text-xs font-semibold text-text-secondary">Verify QR Code *</label>
-                            <div id="qr-reader" className="w-full overflow-hidden rounded-lg border border-brand-border" />
-                            <button type="button" onClick={() => {
-                                setIsScanning(true);
-                                const scanner = new Html5QrcodeScanner("qr-reader", {
-                                    fps: 10,
-                                    qrbox: { width: 220, height: 220 },
-                                    aspectRatio: 1.0,
-                                    videoConstraints: {
-                                        facingMode: { exact: "environment" },
-                                        width: { ideal: 1920 },
-                                        height: { ideal: 1080 },
-                                        focusMode: "continuous"
-                                    } as any
-                                }, false);
-                                scanner.render((decodedText) => {
-                                    if(decodedText === asset?.qr_code) {
-                                        setQrVerified(true);
-                                        setScannedQr(decodedText);
-                                        scanner.clear();
-                                    } else {
-                                        toast.error("Verification Failed: Scanned QR does not match this asset");
-                                    }
-                                }, (err: any) => {
-                                    if (typeof err === 'string' && (err.includes("NotFoundException") || err.includes("No MultiFormat Readers"))) return;
-                                    console.error(err);
-                                    if (typeof err !== 'string' && err?.name === 'NotAllowedError') {
-                                        toast.error("Camera permission denied. Please allow camera access in your browser settings.");
-                                    } else {
-                                        toast.error("Error accessing camera. Please try again.");
-                                    }
-                                });
-                            }} className="w-full py-2 bg-brand-gold text-white text-xs font-medium rounded-lg">Start Scanning</button>
-                        </div>
-                    )}
-                    {qrVerified && <p className="text-emerald-500 text-xs font-bold flex items-center gap-1"><CheckCircle2 size={12}/> QR Code Verified</p>}
-
-                    {/* Photo Upload Step */}
-                    {qrVerified && (
-                         <div className="space-y-2">
-                             <label className="block text-xs font-semibold text-text-secondary">📸 Photo Evidence *</label>
-                             <input type="file" accept="image/*" capture="environment" onChange={(e) => {
-                                 if(!e.target.files || e.target.files.length === 0) return;
-                                 setPhotoFile(e.target.files[0]);
-                             }} className="w-full text-sm text-text-secondary border border-brand-border rounded-lg p-2" />
-                             {photoFile && (
-                                <div className="mt-2 border border-brand-border p-2 rounded-lg bg-bg-base/50">
-                                    <p className="text-xs text-emerald-500 font-bold mb-1">📷 Photo Selected</p>
-                                    <img src={URL.createObjectURL(photoFile)} className="h-20 w-full object-cover rounded" alt="Evidence" />
-                                </div>
-                             )}
-                         </div>
-                    )}
-
-                    <div className="flex justify-end gap-2 pt-2">
-                      <button type="button" onClick={() => { setIsResolveModalOpen(false); setSelectedTicketId(null); setQrVerified(false); setPhotoFile(null); }} className="px-4 py-2 text-sm text-text-secondary hover:bg-bg-base rounded-lg transition-colors cursor-pointer min-h-[44px]">Cancel</button>
-                      <button type="submit" disabled={submittingResolution || !qrVerified || !photoFile} className="bg-emerald-600 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors flex items-center justify-center min-h-[44px] cursor-pointer">
-                        {submittingResolution ? 'Saving...' : 'Resolve Ticket'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* Modal for editing section/location */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-100">
-                    <div className="bg-bg-elevated p-6 rounded-xl border border-brand-border w-full max-w-sm shadow-xl">
-                        <h2 className="text-lg font-bold mb-4 text-text-primary">Update Machine Details</h2>
                         
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-text-secondary mb-1">Target Section *</label>
-                                <select 
-                                    value={selectedSection} 
-                                    onChange={(e) => setSelectedSection(e.target.value)}
-                                    className="w-full p-2.5 min-h-[44px] border border-brand-border rounded-lg bg-bg-base text-text-primary outline-none focus:border-brand-gold text-sm cursor-pointer font-medium"
-                                >
-                                    {sections.map(s => <option key={s.id} value={s.section_name}>{s.section_name}</option>)}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-semibold text-text-secondary mb-1">Asset Photograph</label>
-                                <div className="border border-dashed border-brand-border rounded-lg p-4 bg-bg-base/50">
-                                    <input 
-                                        type="file" 
-                                        accept="image/*" 
-                                        capture="environment" 
-                                        onChange={(e) => {
-                                            if (e.target.files && e.target.files[0]) {
-                                                setPendingMachinePhoto(e.target.files[0]);
-                                            }
-                                        }}
-                                        className="block w-full text-xs text-text-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-brand-gold file:text-white file:text-xs file:font-semibold hover:file:bg-brand-gold/90 transition-all cursor-pointer"
-                                    />
-                                    {pendingMachinePhoto && (
-                                        <div className="mt-2 flex items-center gap-2 text-emerald-500 text-[10px] font-bold uppercase tracking-wider">
-                                            <CheckCircle2 size={12} /> Photo captured & ready for upload
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                        <div className="p-6 border-t border-divider bg-bg-base flex gap-3 justify-end">
+                            <button 
+                                onClick={() => showConfirm ? setShowConfirm(false) : setIsSectionModalOpen(false)} 
+                                className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => showConfirm ? performSectionChange() : setShowConfirm(true)}
+                                disabled={!selectedSectionId || isSavingSection}
+                                className="bg-brand-gold hover:bg-brand-gold/90 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center min-w-[120px]"
+                            >
+                                {isSavingSection ? 'Synchronizing...' : showConfirm ? 'Acknowledge & Save' : 'Proceed'}
+                            </button>
                         </div>
-
-                        <div className="flex justify-end gap-2 mt-6">
-                            <button onClick={() => { setIsModalOpen(false); setPendingMachinePhoto(null); }} className="px-4 py-2.5 min-h-[44px] text-text-secondary hover:bg-bg-base rounded-lg cursor-pointer text-sm">Cancel</button>
-                            <button onClick={handleSave} disabled={saving} className="bg-brand-gold text-white px-5 py-2.5 min-h-[44px] rounded-lg font-medium hover:bg-brand-gold/90 transition-colors flex items-center justify-center text-sm cursor-pointer min-w-[120px]">
-                                {saving ? 'Saving...' : 'Save Changes'}
+                    </div>
+                </div>
+            )}
+            {/* Ticket Creation Modal */}
+            {isTicketModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-bg-elevated w-full max-w-lg rounded-2xl shadow-2xl border border-divider overflow-hidden flex flex-col">
+                        <div className="px-6 py-4 border-b border-divider flex items-center justify-between bg-bg-subtle">
+                            <h3 className="font-bold text-text-primary flex items-center gap-2"><Shield size={18}/> Log Service Issue</h3>
+                            <button onClick={() => setIsTicketModalOpen(false)} className="text-text-tertiary hover:text-text-primary"><X size={20} /></button>
+                        </div>
+                        <div className="p-6">
+                            <label className="block text-sm font-medium text-text-secondary mb-2">Description of Hardware Issue</label>
+                            <textarea
+                                value={ticketIssue}
+                                onChange={(e) => setTicketIssue(e.target.value)}
+                                rows={4}
+                                className="w-full bg-bg-base border border-divider rounded-lg p-3 text-text-primary focus:border-brand-gold focus:ring-1 focus:ring-brand-gold resize-none"
+                                placeholder="Describe the mechanical or software fault..."
+                            />
+                        </div>
+                        <div className="px-6 py-4 border-t border-divider bg-bg-subtle flex gap-3 justify-end items-center">
+                            <button onClick={() => setIsTicketModalOpen(false)} className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors">Cancel</button>
+                            <button 
+                                onClick={handleCreateTicket} 
+                                disabled={isSavingTicket || !ticketIssue.trim()}
+                                className="bg-brand-gold hover:bg-brand-gold/90 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-medium text-sm transition-colors"
+                            >
+                                {isSavingTicket ? 'Logging...' : 'Submit Ticket'}
                             </button>
                         </div>
                     </div>
@@ -506,3 +393,6 @@ export function AssetDetailsPage() {
         </div>
     );
 }
+
+// Ensure icon is defined
+const Scan = (props: any) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></svg>;

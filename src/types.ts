@@ -22,8 +22,12 @@ export interface NormalizedCustomer {
 
 export interface MaintenanceTicket {
   id: string;
+  ticket_number?: string;
   machine_id: string;
   issue_description: string;
+  resolution_notes?: string;
+  photo_url?: string;
+  completed_at?: string;
   status: string;
   priority: string;
   created_at: string;
@@ -152,11 +156,51 @@ export interface User {
 
 export interface Machine {
   id: string;
+  fam_id?: string;
+  section_id?: string | null;
+  customer_id?: string | null;
+  contract_id?: string | null;
   serial_number: string;
   qr_code: string;
   asset_name: string;
-  section: string;
+  status: string;
   photo_url?: string | null;
+  created_at?: string;
+}
+
+export interface VMachineDetails {
+  machine_id: string;
+  serial_number: string;
+  qr_code: string;
+  asset_name: string;
+  machine_status: string;
+  model_name: string;
+  manufacturer: string;
+  category: string;
+  section_name: string | null;
+  customer_id: string | null;
+  customer_code: string | null;
+  customer_name: string | null;
+  customer_region: string | null;
+  contract_id: string | null;
+  contract_number: string | null;
+  contract_type: string | null;
+  section_id?: string | null;
+}
+
+export type TransactionType = 'RECEIVE' | 'DISPATCH' | 'TRANSFER' | 'ADJUST' | 'ARCHIVE';
+
+export interface WarehouseTransaction {
+  id: string;
+  stock_id: string;
+  user_id: string | null;
+  type: TransactionType;
+  quantity_change: number;
+  previous_quantity: number;
+  new_quantity: number;
+  reference_number?: string | null;
+  notes?: string | null;
+  created_at: string;
 }
 
 export interface Section {

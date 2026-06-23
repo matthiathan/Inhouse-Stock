@@ -87,7 +87,7 @@ export default function DashboardLayout() {
   return (
     <div className="flex h-screen bg-bg-base overflow-hidden font-sans text-text-primary">
       {/* Desktop Sidebar (Hidden on Mobile) */}
-      <div className="hidden md:flex md:w-64 md:flex-shrink-0 border-r border-brand-border">
+      <div className="hidden md:flex md:w-64 md:flex-shrink-0 border-r border-border-subtle bg-bg-elevated">
         <Sidebar isCollapsed={isSidebarCollapsed} setIsCollapsed={setIsSidebarCollapsed} />
       </div>
 
@@ -105,7 +105,7 @@ export default function DashboardLayout() {
       {/* Main Content Area */}
       <div className="flex flex-col flex-1 w-full min-w-0 overflow-hidden">
         {/* Mobile Header (Hidden on Desktop) */}
-        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-bg-elevated border-b border-brand-border z-10 shrink-0">
+        <header className="md:hidden flex items-center justify-between px-4 py-3 bg-bg-elevated border-b border-border-subtle z-10 shrink-0">
           <div className="flex items-center gap-2">
             <ShieldCheck className="text-text-primary" size={24} />
             <span className="font-bold text-lg tracking-wider">DALLMAYR</span>
@@ -122,7 +122,7 @@ export default function DashboardLayout() {
         {/* Scrollable Main Content */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden relative bg-bg-base">
           {/* Desktop Breadcrumb Header */}
-            <div className="hidden md:flex h-16 border-b border-brand-border bg-bg-elevated sticky top-0 z-30 px-8 items-center justify-between">
+            <div className="hidden md:flex h-16 border-b border-border-subtle bg-bg-elevated sticky top-0 z-30 px-8 items-center justify-between">
               {generateBreadcrumbs()}
               <div className="flex items-center gap-3">
                 <span className="text-[10px] uppercase font-black tracking-widest text-text-secondary">
