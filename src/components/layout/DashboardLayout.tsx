@@ -11,6 +11,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useState, useEffect } from 'react';
 
 import { ALL_NAV_ITEMS } from '../../constants/navigation';
+import { ScannerTrigger } from '../scanner/ScannerTrigger';
 
 export default function DashboardLayout() {
   const { role, logout, user } = useAuth();
@@ -134,6 +135,7 @@ export default function DashboardLayout() {
           <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
             <Outlet />
           </div>
+          <ScannerTrigger />
         </main>
       </div>
     </div>
