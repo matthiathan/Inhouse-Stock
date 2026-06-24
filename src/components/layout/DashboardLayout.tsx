@@ -52,9 +52,9 @@ export default function DashboardLayout() {
 
   const mobileNavItems = useMemo(() => {
     const preferredPathsByRole: Record<string, string[]> = {
-      admin: ['/warehouse', '/dispatch', '/scanner', '/analytics'],
-      ops_manager: ['/warehouse', '/dispatch', '/scanner', '/analytics'],
-      warehouse: ['/warehouse', '/orders', '/fulfillment', '/scanner'],
+      admin: ['/command-center', '/warehouse', '/dispatch', '/analytics'],
+      ops_manager: ['/command-center', '/warehouse', '/dispatch', '/analytics'],
+      warehouse: ['/command-center', '/warehouse', '/orders', '/scanner'],
       tech: ['/my-route', '/scanner', '/assets'],
       road_tech: ['/my-route', '/scanner', '/assets'],
       finance: ['/tasks'],
