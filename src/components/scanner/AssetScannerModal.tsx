@@ -14,6 +14,10 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
   const { data: lookupResult, isLoading, error } = useMachineLookup(scannedCode);
   const [showForm, setShowForm] = useState(false);
 
+  const handleScanSuccess = useCallback((code: string) => {
+    setScannedCode(code);
+  }, []);
+
   // Reset state when closed
   const resetScannerState = useCallback(() => {
     setScannedCode(null);
@@ -25,13 +29,6 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
       resetScannerState();
     }
   }, [isOpen, resetScannerState]);
-
-  if (!isOpen) return null;
-
-
-  const handleScanSuccess = useCallback((code: string) => {
-    setScannedCode(code);
-  }, []);
 
   const handleReset = () => {
     setScannedCode(null);
@@ -46,6 +43,8 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
         setShowForm(true);
     }
   }, [isNotFound]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">

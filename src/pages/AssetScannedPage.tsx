@@ -5,7 +5,9 @@ import { useMachineLookup } from '../hooks/useMachineLookup';
 
 export const AssetScannedPage: React.FC = () => {
   const [scannedCode, setScannedCode] = useState<string | null>(null);
-  const { data: machineData, isLoading, error } = useMachineLookup(scannedCode);
+  const { data: lookupResult, isLoading, error } = useMachineLookup(scannedCode);
+  const machineData = lookupResult?.data;
+  const isNotFound = lookupResult?.isNotFound;
 
   const handleScanSuccess = (code: string) => {
     setScannedCode(code);
@@ -37,8 +39,22 @@ export const AssetScannedPage: React.FC = () => {
           </div>
         )}
 
-        {!isLoading && !machineData && (
+        {!isLoading && !machineData && !isNotFound && (
             <QRScannerCamera onScanSuccess={handleScanSuccess} />
+        )}
+
+        {!isLoading && isNotFound && scannedCode && (
+            <div className="flex flex-col items-center justify-center p-8 space-y-4">
+                <p className="text-text-primary font-medium text-center">
+                    QR Code <span className="font-bold">{scannedCode}</span> is not in the system.
+                </p>
+                <button
+                    onClick={handleReset}
+                    className="w-full px-5 py-3 bg-gray-100 text-gray-900 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                    Scan Different Code
+                </button>
+            </div>
         )}
 
         {error && (
