@@ -23,12 +23,6 @@ SUPABASE_SERVICE_ROLE_KEY=<server-only service role key>
 
 For deployments, keep environment-specific values in `.env.local`, hosting environment variables, or your platform secret manager. The anon key is safe for browser use when Row Level Security policies are correctly configured in Supabase. The service role key is supported for trusted server-side Supabase administration only and must never be exposed through client-side code or any `VITE_` variable.
 
-## Security model
-
-- Browser code uses only the Supabase URL and anon key.
-- Server-side administrative Supabase operations must use `SUPABASE_SERVICE_ROLE_KEY` from `.env.local` or deployment secrets.
-- The service role key is intentionally excluded from committed files and from the `/api/config` response.
-
 ## Run locally
 
 **Prerequisites:** Node.js 20+
