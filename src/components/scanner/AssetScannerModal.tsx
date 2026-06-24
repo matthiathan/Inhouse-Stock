@@ -19,6 +19,10 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
     setScannedCode(code);
   }, []);
 
+  const handleScanSuccess = useCallback((code: string) => {
+    setScannedCode(code);
+  }, []);
+
   // Reset state when closed
   const resetScannerState = useCallback(() => {
     setScannedCode(null);
