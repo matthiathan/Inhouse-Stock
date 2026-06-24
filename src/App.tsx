@@ -4,6 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 import { Toaster } from 'sonner';
 import DashboardLayout from './components/layout/DashboardLayout';
 import {
+  CommandCenterPage,
   WarehousePage,
   AssetsPage,
   NewAssetPage,
@@ -45,7 +46,7 @@ function RoleProtectedRoute({ children, allowedRoles }: RoleProtectedRouteProps)
   const userRole = role || 'user';
 
   if (!allowedRoles.includes(userRole)) {
-    const redirectTarget = (userRole === 'tech' || userRole === 'road_tech' || userRole === 'user') ? '/scanner' : '/warehouse';
+    const redirectTarget = (userRole === 'tech' || userRole === 'road_tech' || userRole === 'user') ? '/scanner' : '/command-center';
     return <Navigate to={redirectTarget} replace />;
   }
 
@@ -54,7 +55,7 @@ function RoleProtectedRoute({ children, allowedRoles }: RoleProtectedRouteProps)
 
 function IndexRedirect() {
   const { role } = useAuth();
-  const target = (role === 'tech' || role === 'road_tech') ? '/my-route' : (role === 'user' ? '/scanner' : '/warehouse');
+  const target = (role === 'tech' || role === 'road_tech') ? '/my-route' : (role === 'user' ? '/scanner' : '/command-center');
   return <Navigate to={target} replace />;
 }
 
@@ -153,6 +154,14 @@ export default function App() {
             element={user ? <DashboardLayout /> : <Navigate to="/login" replace />}
           >
             <Route index element={<IndexRedirect />} />
+            <Route
+              path="command-center"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'ops_manager', 'warehouse']}>
+                  <CommandCenterPage />
+                </RoleProtectedRoute>
+              }
+            />
             <Route
               path="warehouse"
               element={
