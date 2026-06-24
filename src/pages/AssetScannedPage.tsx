@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { QRScannerCamera } from '../components/scanner/QRScannerCamera';
 import { ScannedMachineProfile } from '../components/scanner/ScannedMachineProfile';
 import { useMachineLookup } from '../hooks/useMachineLookup';
@@ -9,9 +9,9 @@ export const AssetScannedPage: React.FC = () => {
   const machineData = lookupResult?.data;
   const isNotFound = lookupResult?.isNotFound;
 
-  const handleScanSuccess = (code: string) => {
+  const handleScanSuccess = useCallback((code: string) => {
     setScannedCode(code);
-  };
+  }, []);
 
   const handleReset = () => {
     setScannedCode(null);
