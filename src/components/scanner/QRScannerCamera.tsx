@@ -4,7 +4,6 @@ import { AlertTriangle, Camera, RefreshCw } from 'lucide-react';
 
 interface QRScannerCameraProps {
   onScanSuccess: (decodedText: string) => void;
-  enabled?: boolean;
   onFatalError?: (message: string) => void;
 }
 
@@ -33,7 +32,7 @@ const getReadableScannerError = (error: unknown) => {
   return 'The scanner could not start. Please retry or reload this screen.';
 };
 
-export const QRScannerCamera: React.FC<QRScannerCameraProps> = ({ enabled = true, onScanSuccess, onFatalError }) => {
+export const QRScannerCamera: React.FC<QRScannerCameraProps> = ({ onScanSuccess, onFatalError }) => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isMountedRef = useRef(true);
   const hasScannedRef = useRef(false);
@@ -46,14 +45,11 @@ export const QRScannerCamera: React.FC<QRScannerCameraProps> = ({ enabled = true
   );
 
   useEffect(() => {
-    if (!enabled) return;
-
     isMountedRef.current = true;
     hasScannedRef.current = false;
     setFatalError(null);
 
-    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 320;
-    const qrboxWidth = Math.min(Math.max(viewportWidth * 0.72, 220), 320);
+    const qrboxWidth = Math.min(Math.max(window.innerWidth * 0.72, 220), 320);
     const scanner = new Html5Qrcode(elementId, false);
     scannerRef.current = scanner;
 
@@ -143,7 +139,7 @@ export const QRScannerCamera: React.FC<QRScannerCameraProps> = ({ enabled = true
         }
       });
     };
-  }, [elementId, enabled, onFatalError, onScanSuccess, retryKey]);
+  }, [elementId, onFatalError, onScanSuccess, retryKey]);
 
   if (fatalError) {
     return (
