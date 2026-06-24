@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { assetRepository } from '../services/api/assetRepository';
-import { sclRepository } from '../features/dispatch/repository';
-import { ticketRepository } from '../features/tickets/repository';
 import { supabase } from '../lib/supabase';
 import { VMachineDetails, Section } from '../types';
 import { toast } from 'sonner';
@@ -67,18 +65,12 @@ export function AssetDetailsPage() {
 
     const fetchServiceHistory = async (machineId: string) => {
         try {
-            const logs = await sclRepository.getAll();
-            const matchingLogs = (logs || [])
-              .filter(log => log.asset_id === machineId || log.serial_number === asset?.serial_number || log.qrcode === asset?.qr_code)
-              .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-              .map(log => ({
-                id: log.id,
-                created_at: log.created_at,
-                status: log.current_status || log.status,
-                resolution_notes: log.closed_remarks || log.narration,
-                technician: { full_name: log.assigned_employee || 'Unassigned' },
-              }));
-            setServiceLogs(matchingLogs);
+            const { data } = await supabase
+              .from('service_call_logs')
+              .select('id, created_at, status, resolution_notes, technician:technician_id(full_name)')
+              .eq('machine_id', machineId)
+              .order('created_at', { ascending: false });
+            if (data) setServiceLogs(data);
         } catch (err) {
             console.error("Failed to load service history");
         }
@@ -125,22 +117,12 @@ export function AssetDetailsPage() {
             await assetRepository.updateSection(asset.machine_id, selectedSectionId);
             
             // Audit Log
-            await sclRepository.create({
-                doc_no: `MOVE-${Date.now()}`,
-                priority: 'Low',
-                current_status: 'Closed',
+            await supabase.from('service_call_logs').insert({
+                machine_id: asset.machine_id,
+                technician_id: (await supabase.auth.getUser()).data.user?.id,
                 narration: `Moved machine from ${previousSectionName || 'Unknown'} to ${targetSection?.section_name || 'Unknown'}`,
-                customer_id: asset.customer_id || '',
-                assigned_employee_id: (await supabase.auth.getUser()).data.user?.id || '',
-                serial_number: asset.serial_number,
-                qrcode: asset.qr_code,
-                client_name: asset.customer_name || '',
-                address: targetSection?.section_name || '',
-                service_type: 'Internal Transfer',
-                sub_task: 'Section Update',
-                assigned_date_time: new Date().toISOString(),
-                closed_date: new Date().toISOString(),
-                closed_remarks: 'Section updated from asset detail workflow',
+                status: 'Approved',
+                region: 'NATIONAL' // Needs actual user region but fallback for now
             } as any);
 
             toast.success("Section updated successfully");
@@ -166,14 +148,15 @@ export function AssetDetailsPage() {
             const userRes = await supabase.auth.getUser();
             const userId = userRes.data.user?.id;
             
-            await ticketRepository.create({
+            await supabase.from('maintenance_tickets').insert({
+                ticket_number: `TKT-${Math.floor(Math.random() * 100000)}`,
                 machine_id: asset.machine_id,
                 customer_id: asset.customer_id,
                 issue_description: ticketIssue,
-                tech_id: userId || '',
+                reported_by: userId,
                 priority: 'High',
                 status: 'Open'
-            } as any);
+            });
 
             toast.success("Maintenance Ticket Created");
             setTicketIssue('');

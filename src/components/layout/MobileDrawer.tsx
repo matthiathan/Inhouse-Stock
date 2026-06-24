@@ -1,11 +1,9 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LogOut, Moon, Sun, X } from 'lucide-react';
 import { ALL_NAV_ITEMS } from '../../constants/navigation';
-// @ts-ignore
-import DallmayrLogoLight from '../../../assets/icon-512-light.png';
-// @ts-ignore
-import DallmayrLogoDark from '../../../assets/icon-512-dark.png';
+import { useAuth } from '../../hooks/useAuth';
+import { LogOut, X } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 interface MobileDrawerProps {
   isOpen: boolean;
@@ -18,6 +16,7 @@ interface MobileDrawerProps {
 }
 
 export default function MobileDrawer({ isOpen, onClose, user, role, isDark, toggleTheme, onLogout }: MobileDrawerProps) {
+  // Close drawer on escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -26,97 +25,88 @@ export default function MobileDrawer({ isOpen, onClose, user, role, isDark, togg
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose]);
 
+  // Prevent background scrolling when drawer is open
   useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : '';
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
     return () => {
       document.body.style.overflow = '';
     };
   }, [isOpen]);
 
-  const userRole = role || 'user';
-  const allowedNavItems = ALL_NAV_ITEMS.filter(item => item.roles.includes(userRole));
+  const allowedNavItems = ALL_NAV_ITEMS.filter(item => 
+    item.roles.includes(role || 'user')
+  );
 
   const handleLogout = async () => {
-    await onLogout();
+    await supabase.auth.signOut();
     onClose();
   };
 
   return (
     <>
+      {/* Backdrop Overlay */}
       {isOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-sm transition-opacity md:hidden"
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity md:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
       )}
 
-      <div
-        className={`fixed inset-y-0 left-0 z-50 flex w-[304px] max-w-[86vw] flex-col border-r border-brand-border bg-bg-elevated text-text-primary shadow-elevated transition-transform duration-300 ease-in-out md:hidden ${
+      {/* Drawer Panel */}
+      <div 
+        className={`fixed inset-y-0 left-0 w-[280px] bg-bg-elevated text-text-primary shadow-2xl z-50 transform transition-transform duration-300 ease-in-out md:hidden flex flex-col ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-brand-border p-4">
-          <img
-            src={isDark ? DallmayrLogoDark : DallmayrLogoLight}
-            alt="Dallmayr South Africa"
-            className="h-12 w-auto object-contain"
-          />
-          <button
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-brand-border shrink-0">
+          <h1 className="text-lg font-bold text-brand-gold tracking-wide">Dallmayr SA</h1>
+          <button 
             onClick={onClose}
-            className="rounded-md border border-brand-border bg-bg-elevated p-2 text-text-secondary transition hover:text-brand-gold"
+            className="p-2 text-text-secondary hover:text-white hover:bg-brand-border rounded-md transition-colors"
             aria-label="Close menu"
           >
-            <X className="h-5 w-5" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="border-b border-brand-border bg-bg-canvas px-4 py-3">
-          <p className="truncate text-sm font-black">{user?.email || 'User'}</p>
-          <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-            {userRole.replace('_', ' ')}
-          </p>
-        </div>
-
-        <nav className="scrollbar-hide flex-1 overflow-y-auto px-3 py-4">
-          <div className="space-y-1">
-            {allowedNavItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  onClick={onClose}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-md px-3 py-3 text-sm font-bold transition-all duration-200 ${
-                      isActive
-                        ? 'bg-dallmayr-blue text-dallmayr-gold-light shadow-subtle'
-                        : 'text-text-secondary hover:bg-bg-muted hover:text-text-primary'
-                    }`
-                  }
-                >
-                  <Icon className="h-5 w-5 shrink-0" />
-                  <span className="truncate">{item.name}</span>
-                </NavLink>
-              );
-            })}
-          </div>
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+          {allowedNavItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                onClick={onClose} // Auto-close drawer on navigation
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 text-base font-medium ${
+                    isActive
+                      ? 'bg-brand-gold text-white shadow-md'
+                      : 'text-text-secondary hover:bg-brand-border/50 hover:text-brand-gold'
+                  }`
+                }
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                <span className="truncate">{item.name}</span>
+              </NavLink>
+            );
+          })}
         </nav>
 
-        <div className="shrink-0 border-t border-brand-border bg-bg-canvas p-4">
-          <button
-            onClick={toggleTheme}
-            className="mb-2 flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm font-bold text-text-secondary transition hover:bg-bg-muted hover:text-text-primary"
-          >
-            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
-          </button>
+        {/* Footer / Logout */}
+        <div className="p-4 border-t border-brand-border shrink-0">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10"
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-base font-medium text-red-500 hover:bg-red-500/10 transition-colors"
           >
-            <LogOut className="h-5 w-5 shrink-0" />
-            <span>Logout</span>
+            <LogOut className="w-5 h-5 shrink-0" />
+            <span>Log Out</span>
           </button>
         </div>
       </div>

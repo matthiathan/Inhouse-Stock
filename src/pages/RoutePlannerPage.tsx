@@ -105,7 +105,7 @@ export function RoutePlannerPage() {
       id: task.id,
       tech_id: task.assigned_employee_id,
       machine_id: task.asset_id,
-      status: task.current_status || task.status || 'Open',
+      status: task.status || 'Open',
       created_at: task.created_at,
       priority: task.priority,
       issue_description: task.narration,
@@ -124,9 +124,8 @@ export function RoutePlannerPage() {
       return;
     }
 
-    const currentStatus = (selectedScl.current_status || selectedScl.status || 'Open') as SclStatus;
     const validation = validateSclTransition(
-      currentStatus,
+      selectedScl.status || 'Open',
       targetStatus,
       remarksInput,
       role || undefined
@@ -140,7 +139,7 @@ export function RoutePlannerPage() {
     updateSclMutation.mutate({
       id: selectedSclId,
       update: {
-        current_status: targetStatus,
+        status: targetStatus,
         closed_remarks: targetStatus === 'Closed' ? remarksInput : selectedScl.closed_remarks,
         closed_date: targetStatus === 'Closed' ? new Date().toISOString() : selectedScl.closed_date
       }
@@ -149,8 +148,8 @@ export function RoutePlannerPage() {
         toast.success(`Success! Status changed to ${targetStatus}`);
         await logStateTransition(
           selectedSclId,
-          currentStatus,
-          targetStatus,
+          (selectedScl.status || 'Open') as SclStatus,
+          targetStatus as SclStatus,
           user?.id || 'sys',
           user?.email || 'admin@fieldservices.com',
           remarksInput || 'Manual Status Transition'
@@ -169,7 +168,7 @@ export function RoutePlannerPage() {
   const filteredTasks = useMemo(() => {
     return (sclTasks || []).filter(task => {
       const techMatch = filterTech === 'all' || task.assigned_employee_id === filterTech;
-      const statusMatch = filterStatus === 'all' || (task.current_status || task.status) === filterStatus;
+      const statusMatch = filterStatus === 'all' || task.status === filterStatus;
       return techMatch && statusMatch;
     });
   }, [sclTasks, filterTech, filterStatus]);

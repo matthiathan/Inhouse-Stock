@@ -24,7 +24,6 @@ import VirtualStockList from '../components/VirtualStockList';
 
 export { NewAssetPage } from './NewAssetPage';
 export { AnalyticsPage } from './AnalyticsPage';
-export { CommandCenterPage } from './CommandCenterPage';
 export { AssetDetailsPage } from './AssetDetailsPage';
 export { OrdersPage } from './OrdersPage';
 export { WarehousePage } from './warehouse';
@@ -2456,3 +2455,4 @@ export function LoginPage() {
     </div>
   );
 }
+

@@ -89,7 +89,7 @@ export const processOfflineSyncQueue = async (queryClient?: any) => {
          await ticketRepository.update(task.ticketId, {
             photo_url: photoUrl,
             resolution_notes: task.notes,
-            machine_id: task.asset_id,
+            machine_id: task.machine_id || task.asset_id,
             status: task.status,
             ...(task.status === 'Completed' || task.status === 'Closed' ? { completed_at: new Date().toISOString() } : {})
          });
@@ -121,3 +121,4 @@ export const processOfflineSyncQueue = async (queryClient?: any) => {
     }
   }
 };
+

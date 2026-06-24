@@ -77,19 +77,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!isConfigured) {
-      const demoRole = localStorage.getItem('demo_user_role');
-      if (demoRole) {
-        setUser({
-          id: 'demo-user',
-          email: localStorage.getItem('demo_user_email') || 'operations@dallmayr.co.za',
-          app_metadata: { role: demoRole },
-          user_metadata: { role: demoRole },
-          aud: 'authenticated',
-          created_at: new Date().toISOString()
-        } as User);
-        setRole(demoRole);
-        setCanUpdateLocation(true);
-      }
       setLoading(false);
       return;
     }
@@ -110,35 +97,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     };
 
-    const sessionTimeout = new Promise<null>((resolve) => {
-      window.setTimeout(() => resolve(null), 5000);
-    });
-
-    Promise.race([
-      supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => session),
-      sessionTimeout,
-    ]).then((session) => {
-      if (!active) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
       handleSessionChange(session);
     }).catch((err) => {
-      console.warn('Initial session fetch error:', err?.message || err);
+      console.warn('Initial session fetch error:', err.message);
       handleSessionChange(null);
     });
 
-    let subscription: { unsubscribe: () => void } | null = null;
-
-    try {
-      const authListener = supabase.auth.onAuthStateChange(async (_event: string, session: Session | null) => {
-        await handleSessionChange(session);
-      });
-      subscription = authListener.data.subscription;
-    } catch (err) {
-      console.warn('Auth state listener setup failed:', err);
-    }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      await handleSessionChange(session);
+    });
 
     return () => {
       active = false;
-      subscription?.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -162,22 +134,10 @@ export const useAuth = () => {
   }
   
   const login = async (email: string, password: string) => {
-    if (!isConfigured) {
-      localStorage.setItem('demo_user_role', 'admin');
-      localStorage.setItem('demo_user_email', email || 'operations@dallmayr.co.za');
-      window.location.href = '/';
-      return { error: null, data: null };
-    }
     return await supabase.auth.signInWithPassword({ email, password });
   };
 
   const logout = async () => {
-    if (!isConfigured) {
-      localStorage.removeItem('demo_user_role');
-      localStorage.removeItem('demo_user_email');
-      window.location.href = '/login';
-      return { error: null };
-    }
     // Since we are resetting state, try doing it as much as possible synchronously first
     try {
       await supabase.auth.signOut();

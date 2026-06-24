@@ -4,14 +4,15 @@ import {
   QrCode, 
   Settings, 
   BarChart3, 
-  LayoutDashboard,
   Map, 
   MapPin,
-  ClipboardList
+  ClipboardList,
+  ShieldAlert,
+  PieChart,
+  ListTodo
 } from 'lucide-react';
 
 export const ALL_NAV_ITEMS = [
-  { name: 'Command Center', path: '/command-center', icon: LayoutDashboard, roles: ['admin', 'ops_manager', 'warehouse'] },
   { name: 'Warehouse', path: '/warehouse', icon: Package, roles: ['admin', 'ops_manager', 'warehouse'] },
   { name: 'Orders', path: '/orders', icon: ClipboardList, roles: ['admin', 'ops_manager', 'warehouse'] },
   { name: 'Fulfillment', path: '/fulfillment', icon: ClipboardList, roles: ['admin', 'ops_manager', 'warehouse'] },

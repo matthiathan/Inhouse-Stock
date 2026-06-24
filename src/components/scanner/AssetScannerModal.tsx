@@ -13,21 +13,11 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const { data: lookupResult, isLoading, error } = useMachineLookup(scannedCode);
   const [showForm, setShowForm] = useState(false);
-  const [scannerResetKey, setScannerResetKey] = useState(0);
-
-  const handleScanSuccess = useCallback((code: string) => {
-    setScannedCode(code);
-  }, []);
-
-  const handleScanSuccess = useCallback((code: string) => {
-    setScannedCode(code);
-  }, []);
 
   // Reset state when closed
   const resetScannerState = useCallback(() => {
     setScannedCode(null);
     setShowForm(false);
-    setScannerResetKey(key => key + 1);
   }, []);
 
   useEffect(() => {
@@ -36,10 +26,16 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
     }
   }, [isOpen, resetScannerState]);
 
+  if (!isOpen) return null;
+
+
+  const handleScanSuccess = useCallback((code: string) => {
+    setScannedCode(code);
+  }, []);
+
   const handleReset = () => {
     setScannedCode(null);
     setShowForm(false);
-    setScannerResetKey(key => key + 1);
   };
 
   const machineData = lookupResult?.data;
@@ -50,8 +46,6 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
         setShowForm(true);
     }
   }, [isNotFound]);
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -108,7 +102,7 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
         )}
 
         {!showForm && !isLoading && !machineData && !isNotFound && (
-            <QRScannerCamera key={scannerResetKey} enabled={isOpen} onScanSuccess={handleScanSuccess} />
+            <QRScannerCamera onScanSuccess={handleScanSuccess} />
         )}
 
         {error && (

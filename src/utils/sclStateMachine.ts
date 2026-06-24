@@ -152,9 +152,9 @@ export const checkAssetThresholds = async (
     // Fetch SCL logs for this serial number in the last 30 days
     const { data, error } = await supabase
       .from('service_call_logs')
-      .select('id, Date')
-      .eq('Serial #', serialNumber)
-      .gte('Date', filterDate);
+      .select('id, created_at')
+      .eq('serial_number', serialNumber)
+      .gte('created_at', filterDate);
 
     if (error) {
       console.error('Error checking SCL thresholds from DB:', error);

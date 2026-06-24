@@ -99,28 +99,43 @@ export interface OrderItem {
 
 export interface ServiceCallLog {
   id: string;
-  customer_id: string;
+  customer_id?: string;
   asset_id?: string;
-  assigned_employee_id: string;
-  current_status: 'Open' | 'In Progress' | 'Resolved' | 'Closed';
-  status?: 'Open' | 'In Progress' | 'Resolved' | 'Closed' | string;
-  priority: 'Low' | 'Medium' | 'High' | 'Critical';
-  doc_no: string;
-  do_number?: string | null;
-  narration: string;
+  assigned_employee_id?: string;
+  current_status?: 'Open' | 'In Progress' | 'Closed';
+  priority?: 'Low' | 'Medium' | 'High' | 'Critical';
+  doc_no?: string;
+  do_number?: string;
+  narration?: string;
   photo_url?: string | null;
   closed_remarks?: string | null;
   closed_date?: string | null;
-  created_at: string;
+  created_at?: string;
   assigned_date_time?: string;
   serial_number?: string;
   assigned_employee?: string;
   client_name?: string;
   address?: string;
   qrcode?: string;
-  customer_code?: string;
   service_type?: string;
-  sub_task?: string;
+  status?: string;
+
+  // Uppercase legacy properties for backwards compatibility
+  "DocNo"?: string;
+  "DO#"?: string;
+  "Priority"?: 'Low' | 'Medium' | 'High' | 'Critical';
+  "Service Type"?: string;
+  "Sub Task"?: string;
+  "Narration"?: string;
+  "Serial #"?: string;
+  "QRCODE"?: string;
+  "Client Name"?: string;
+  "Client location"?: string;
+  "Address"?: string;
+  "Customer Code"?: string;
+  "Assigned Employee"?: string;
+  "CURRENT STATUS"?: string;
+  "ASSIGNED DATE TIME"?: string;
 }
 
 export interface FinanceServiceRecord {
@@ -163,6 +178,7 @@ export interface Machine {
   section_id?: string | null;
   customer_id?: string | null;
   contract_id?: string | null;
+  customer_code?: string | null;
   serial_number: string;
   qr_code: string;
   asset_name: string;

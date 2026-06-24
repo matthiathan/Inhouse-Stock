@@ -1,170 +1,51 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
-import { AlertTriangle, Camera, RefreshCw } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
 interface QRScannerCameraProps {
   onScanSuccess: (decodedText: string) => void;
-  onFatalError?: (message: string) => void;
 }
 
-const buildScannerConfig = (qrboxWidth: number) => ({
-  fps: 10,
-  qrbox: { width: qrboxWidth, height: qrboxWidth },
-  aspectRatio: 1,
-  rememberLastUsedCamera: true,
-});
-
-const getReadableScannerError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error || 'Unknown scanner error');
-
-  if (/permission|notallowed/i.test(message)) {
-    return 'Camera permission was blocked. Allow camera access in your browser and try again.';
-  }
-
-  if (/notfound|overconstrained|no camera|requested device not found/i.test(message)) {
-    return 'No suitable camera was found. Connect a camera or try another device.';
-  }
-
-  if (/notreadable|track start|could not start/i.test(message)) {
-    return 'The camera is already in use by another app or browser tab. Close it and try again.';
-  }
-
-  return 'The scanner could not start. Please retry or reload this screen.';
-};
-
-export const QRScannerCamera: React.FC<QRScannerCameraProps> = ({ onScanSuccess, onFatalError }) => {
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const isMountedRef = useRef(true);
-  const hasScannedRef = useRef(false);
-  const [fatalError, setFatalError] = useState<string | null>(null);
-  const [retryKey, setRetryKey] = useState(0);
-
-  const elementId = useMemo(
-    () => `qr-reader-${Math.random().toString(36).slice(2, 10)}`,
-    [],
-  );
+export const QRScannerCamera: React.FC<QRScannerCameraProps> = ({ onScanSuccess }) => {
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   useEffect(() => {
-    isMountedRef.current = true;
-    hasScannedRef.current = false;
-    setFatalError(null);
+    // Initialize the scanner
+    const qrboxWidth = Math.min(window.innerWidth * 0.8, 250);
+    const scanner = new Html5QrcodeScanner(
+      "qr-reader",
+      { fps: 10, qrbox: { width: qrboxWidth, height: qrboxWidth } },
+      false
+    );
 
-    const qrboxWidth = Math.min(Math.max(window.innerWidth * 0.72, 220), 320);
-    const scanner = new Html5Qrcode(elementId, false);
+    scanner.render(
+      (decodedText: string) => {
+        // Success handler
+        if (scannerRef.current) {
+          try {
+            // Pause the scanner to prevent double scans
+            scannerRef.current.pause();
+          } catch (e) {
+            console.error("Error pausing scanner", e);
+          }
+        }
+        navigator.vibrate(200);
+        onScanSuccess(decodedText);
+      },
+      (errorMessage: string) => {
+        // Optional: Error handler
+        // console.warn(errorMessage);
+      }
+    );
+
     scannerRef.current = scanner;
 
-    const stopAndClear = async () => {
-      const activeScanner = scannerRef.current;
-      if (!activeScanner) return;
-
-      try {
-        if (activeScanner.isScanning) {
-          await activeScanner.stop();
-        }
-      } catch (error) {
-        console.warn('Asset scanner stop warning:', error);
-      }
-
-      try {
-        activeScanner.clear();
-      } catch (error) {
-        console.warn('Asset scanner clear warning:', error);
-      }
-    };
-
-    const startScanner = async () => {
-      const config = buildScannerConfig(qrboxWidth);
-
-      try {
-        await scanner.start(
-          { facingMode: { exact: 'environment' } },
-          config,
-          async (decodedText) => {
-            if (!isMountedRef.current || hasScannedRef.current) return;
-            hasScannedRef.current = true;
-
-            if (typeof navigator !== 'undefined' && navigator.vibrate) {
-              try {
-                navigator.vibrate(160);
-              } catch {
-                // Vibration is optional and unsupported on some browsers.
-              }
-            }
-
-            await stopAndClear();
-            if (isMountedRef.current) {
-              onScanSuccess(decodedText);
-            }
-          },
-          () => {
-            // Per-frame decode misses are expected while the camera is looking for a QR code.
-          },
-        );
-      } catch (primaryError) {
-        if (!isMountedRef.current) return;
-
-        try {
-          await scanner.start(
-            { facingMode: 'environment' },
-            config,
-            async (decodedText) => {
-              if (!isMountedRef.current || hasScannedRef.current) return;
-              hasScannedRef.current = true;
-              await stopAndClear();
-              if (isMountedRef.current) {
-                onScanSuccess(decodedText);
-              }
-            },
-            () => {},
-          );
-        } catch (fallbackError) {
-          const readableError = getReadableScannerError(fallbackError || primaryError);
-          console.error('Asset scanner failed to start:', fallbackError || primaryError);
-          if (isMountedRef.current) {
-            setFatalError(readableError);
-            onFatalError?.(readableError);
-          }
-          await stopAndClear();
-        }
-      }
-    };
-
-    startScanner();
-
+    // Cleanup when component unmounts
     return () => {
-      isMountedRef.current = false;
-      stopAndClear().finally(() => {
-        if (scannerRef.current === scanner) {
-          scannerRef.current = null;
-        }
-      });
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch(error => console.error("Failed to clear scanner", error));
+      }
     };
-  }, [elementId, onFatalError, onScanSuccess, retryKey]);
+  }, [onScanSuccess]);
 
-  if (fatalError) {
-    return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center dark:border-red-400/20 dark:bg-red-500/10">
-        <AlertTriangle className="mx-auto mb-3 text-red-600 dark:text-red-300" size={28} />
-        <p className="text-sm font-semibold text-red-700 dark:text-red-200">{fatalError}</p>
-        <button
-          type="button"
-          onClick={() => setRetryKey(key => key + 1)}
-          className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-dallmayr-blue px-4 py-2 text-sm font-bold text-white transition hover:bg-dallmayr-blue-light"
-        >
-          <RefreshCw size={16} />
-          Retry scanner
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 rounded-lg border border-brand-border bg-bg-canvas px-3 py-2 text-xs font-bold uppercase tracking-widest text-text-secondary">
-        <Camera size={15} className="text-brand-gold" />
-        Point the camera at an asset QR code
-      </div>
-      <div id={elementId} className="min-h-[280px] w-full overflow-hidden rounded-xl border border-brand-border bg-bg-base" />
-    </div>
-  );
+  return <div id="qr-reader" className="w-full"></div>;
 };

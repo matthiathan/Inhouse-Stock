@@ -19,7 +19,7 @@ export interface PaymentIntentResponse {
  * Interface definition for generic gateway.
  */
 export interface WalletGateway {
-  name: PaymentIntentResponse['gateway'];
+  name: string;
   initiatePayment(request: PaymentIntentRequest): Promise<PaymentIntentResponse>;
   verifyPayment(reference: string): Promise<boolean>;
 }
@@ -28,7 +28,7 @@ export interface WalletGateway {
 // 1. Paystack Integration (Best for Card / Webhooks)
 // -------------------------------------------------------------
 export class PaystackGateway implements WalletGateway {
-  name: PaymentIntentResponse['gateway'] = 'PAYSTACK';
+  name: 'STITCH' | 'PAYSTACK' | 'PEACH' = 'PAYSTACK';
 
   async initiatePayment(request: PaymentIntentRequest): Promise<PaymentIntentResponse> {
     console.log(`[Paystack] Initiating top-up for ${request.amountZAR} ZAR...`);
@@ -52,7 +52,7 @@ export class PaystackGateway implements WalletGateway {
 // 2. Stitch Integration (Best for Capitec & EFT / Account to Account)
 // -------------------------------------------------------------
 export class StitchGateway implements WalletGateway {
-  name: PaymentIntentResponse['gateway'] = 'STITCH';
+  name: 'STITCH' | 'PAYSTACK' | 'PEACH' = 'STITCH';
 
   async initiatePayment(request: PaymentIntentRequest): Promise<PaymentIntentResponse> {
     console.log(`[Stitch] Initiating LinkPay for ${request.amountZAR} ZAR...`);
@@ -75,7 +75,7 @@ export class StitchGateway implements WalletGateway {
 // 3. Peach Payments Integration (Best for Enterprise & Apple/Google Pay)
 // -------------------------------------------------------------
 export class PeachPaymentsGateway implements WalletGateway {
-  name: PaymentIntentResponse['gateway'] = 'PEACH';
+  name: 'STITCH' | 'PAYSTACK' | 'PEACH' = 'PEACH';
 
   async initiatePayment(request: PaymentIntentRequest): Promise<PaymentIntentResponse> {
     console.log(`[Peach] Initiating checkout for ${request.amountZAR} ZAR...`);

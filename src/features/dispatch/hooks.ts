@@ -65,7 +65,8 @@ export const useSubmitSCL = () => {
       for (const item of queue) {
         try {
           const { queuedAt, ...formData } = item;
-          await sclRepository.create(formData);
+          const { error } = await supabase.from('service_call_logs').insert(formData);
+          if (error) throw error;
           successCount++;
         } catch (err) {
           console.error("Sync failed for item:", err);
@@ -100,7 +101,9 @@ export const useSubmitSCL = () => {
       }
 
       // 3. Normal online submission
-      return await sclRepository.create(formData);
+      const { data, error } = await supabase.from('service_call_logs').insert(formData).select().single();
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sclTasks'] });
