@@ -110,20 +110,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const sessionTimeout = new Promise<null>((resolve) => {
+      window.setTimeout(() => resolve(null), 5000);
+    });
+
+    Promise.race([
+      supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => session),
+      sessionTimeout,
+    ]).then((session) => {
+      if (!active) return;
       handleSessionChange(session);
     }).catch((err) => {
-      console.warn('Initial session fetch error:', err.message);
+      console.warn('Initial session fetch error:', err?.message || err);
       handleSessionChange(null);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      await handleSessionChange(session);
-    });
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    try {
+      const authListener = supabase.auth.onAuthStateChange(async (_event: string, session: Session | null) => {
+        await handleSessionChange(session);
+      });
+      subscription = authListener.data.subscription;
+    } catch (err) {
+      console.warn('Auth state listener setup failed:', err);
+    }
 
     return () => {
       active = false;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 
