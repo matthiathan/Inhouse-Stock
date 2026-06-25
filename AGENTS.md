@@ -1,26 +1,26 @@
-# Dallmayr SA Operations Portal: Agent Directives & Code Conventions
+# Agent Guide
 
-This document contains persistent development rules, styling standards, and system constraints for AI agents and engineering contributors working on the **Inhouse Stock** codebase.
+## Product Goal
 
-## 1. Absolute Scope Discipline
-- **Respect User Intent**: Build exactly what is requested. Never add unrequested features, decorative status logs, or mock telemetry feeds in page margins.
-- **Single-View Simplicity**: Simple tasks must reside in simple, elegant single-screen structures. Avoid multi-tab panels or persistent sidebars unless building full-scale feature systems.
-- **Architectural Honesty**: Keep typography, contrast, and spacing clean. Avoid adding decorative tech clutter such as simulated terminal lines (`"CORE NODE ONLINE"`, `"PORT 3000 LIVE"`). Use clean, humble, literal labels (e.g., "Current System Time" instead of `"Chronos Coordinate Finder"`).
+Make the existing operations portal reliable enough for an ASAP company demonstration while keeping the path open for a later Next.js App Router migration.
 
-## 2. Visual Theme & Layout Pairing
-- **Primary Theme**: A restrained, high-contrast, premium light/dark scheme utilizing Dallmayr-inspired gold (`#D4AF37`) as a subtle highlight color against neutral slate (`#111111`) or off-white.
-- **Typography Pairing**:
-  - *Display Headings*: Space Grotesk / Inter (tracking-tight, medium/bold weight).
-  - *Technical/Operational Data*: JetBrains Mono (monospaced tracking for numbers, barcodes, timestamps).
-- **Interactive States**: Hover states must be distinct (e.g., `hover:bg-amber-500/10`, transition periods between 150-200ms).
-- **Touch Targets**: Mobile views must preserve clickable touch zones of at least `44px` in size for field technicians wearing gloves.
+## Non-Negotiables
 
-## 3. Strict Code & Type Constraints
-- **Zero tsc Warnings**: TypeScript strict mode is enabled. Never use explicit `any` types or unsafe type assertions. Always define precise domain types or use generated database schemas.
-- **No Large Component Monoliths**: Never consolidate all logic into a single file (e.g. `App.tsx` or `index.tsx`). Split codes into modular domain modules (`src/features/*/repository.ts`, `src/components/ui/`, etc.).
-- **React 18/19 & Vite Standards**: Use functional components, custom hooks, and correct dependency structures. Ensure all `useEffect` hooks depend strictly on primitive types to avoid infinite re-render loops.
-- **Zero Mock Fallbacks**: Real database bindings (Supabase / local configurations) must be integrated directly. Do not implement simulated API delays or mock database arrays if DB bindings can be created.
+- Do not commit secrets.
+- Do not write real Supabase keys into tracked files.
+- Treat pasted service-role keys as compromised.
+- Use migration files for database changes.
+- Do not delete production data, regional tables, import tables, or legacy source tables.
+- Run `npm run lint`, `npm run test`, and `npm run build` before publishing.
 
-## 4. Supabase Integration & RLS
-- **Derive User Identities**: Never trust client-provided `user_id` values in mutations. Always resolve identities inside PostgreSQL rules using `auth.uid()`.
-- **Verify RLS Presence**: Every added table must explicitly execute `ALTER TABLE ENABLE ROW LEVEL SECURITY;` along with associated SELECT, INSERT, UPDATE, and DELETE policies.
+## Architecture Preferences
+
+- Prefer existing React/Vite patterns during the stabilization phase.
+- Keep Supabase writes in repository/API modules rather than UI components.
+- Centralize permission changes in `src/lib/permissions.ts`.
+- Centralize scanner normalization in `src/utils/qr.ts`.
+- Add focused tests near the module being protected.
+
+## Git
+
+Use branch prefix `codex/` for agent-authored branches. Stage only intentional app files and leave local archives or environment files untracked.

@@ -1,67 +1,98 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Boxes, Loader2, Search } from 'lucide-react';
 import { StockItem } from '../../../types';
-import { Search, Loader2, ArrowRight } from 'lucide-react';
 
-export function InventoryView({ stock, loading }: { stock?: StockItem[] | null, loading: boolean }) {
+const numberFormatter = new Intl.NumberFormat('en-ZA');
+
+export function InventoryView({ stock, loading }: { stock?: StockItem[] | null; loading: boolean }) {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredStock = stock?.filter(item => 
-    item.item_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.barcode.includes(searchTerm)
-  );
+  const filteredStock = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    const items = stock || [];
+
+    if (!query) return items;
+
+    return items.filter(item => {
+      const haystack = [
+        item.item_name,
+        item.sku,
+        item.barcode,
+        item.notes || '',
+      ].join(' ').toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [searchTerm, stock]);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-divider bg-bg-subtle flex gap-4">
-        <div className="relative flex-1 max-w-sm">
+    <div className="flex h-full flex-col">
+      <div className="flex flex-col gap-3 border-b border-divider bg-bg-subtle p-4 md:flex-row md:items-center md:justify-between">
+        <div className="relative w-full md:max-w-sm">
           <Search size={16} className="absolute left-3 top-3 text-text-tertiary" />
           <input
-            type="text"
-            placeholder="Search SKU, Barcode, or Name..."
-            className="w-full bg-bg-base border border-divider rounded-lg pl-9 pr-4 py-2 text-sm text-text-primary focus:border-brand-gold focus:ring-1 focus:ring-brand-gold outline-none"
+            type="search"
+            placeholder="Search SKU, barcode, name, or notes"
+            className="h-10 w-full rounded-md border border-divider bg-bg-base pl-9 pr-4 text-sm text-text-primary outline-none transition focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20"
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={event => setSearchTerm(event.target.value)}
           />
         </div>
+        <div className="text-xs font-bold uppercase tracking-widest text-text-tertiary">
+          {numberFormatter.format(filteredStock.length)} records
+        </div>
       </div>
-      
+
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className="bg-bg-subtle sticky top-0 z-10 border-b border-divider shadow-sm">
+        <table className="w-full min-w-[860px] whitespace-nowrap text-left text-sm">
+          <thead className="sticky top-0 z-10 border-b border-divider bg-bg-subtle shadow-sm">
             <tr>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs">Identity</th>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs">SKU</th>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs">Barcode</th>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs text-right">Available Unit Qty</th>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs text-right">Structure</th>
+              <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-text-secondary">Identity</th>
+              <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-text-secondary">SKU</th>
+              <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-text-secondary">Barcode</th>
+              <th className="px-6 py-4 text-right text-xs font-black uppercase tracking-widest text-text-secondary">Available Units</th>
+              <th className="px-6 py-4 text-right text-xs font-black uppercase tracking-widest text-text-secondary">Structure</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-divider">
             {loading ? (
-              <tr><td colSpan={5} className="p-8 text-center text-text-tertiary"><Loader2 className="animate-spin inline mr-2" size={18}/> Synchronizing Stock Data...</td></tr>
-            ) : filteredStock?.length === 0 ? (
-              <tr><td colSpan={5} className="p-8 text-center text-text-tertiary">No inventory records found.</td></tr>
+              <tr>
+                <td colSpan={5} className="p-10 text-center text-text-tertiary">
+                  <Loader2 className="mr-2 inline animate-spin" size={18} />
+                  Synchronizing stock data
+                </td>
+              </tr>
+            ) : filteredStock.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-10 text-center text-text-tertiary">
+                  <Boxes className="mx-auto mb-3" size={30} />
+                  No inventory records match the current search.
+                </td>
+              </tr>
             ) : (
-              filteredStock?.map(item => (
-                <tr key={item.id} className="hover:bg-bg-subtle/50 transition-colors">
+              filteredStock.map(item => (
+                <tr key={item.id} className="transition-colors hover:bg-bg-subtle/50">
                   <td className="px-6 py-4">
-                    <p className="font-semibold text-text-primary">{item.item_name}</p>
+                    <p className="font-bold text-text-primary">{item.item_name}</p>
+                    {item.notes && <p className="mt-1 max-w-[28rem] truncate text-xs text-text-tertiary">{item.notes}</p>}
                   </td>
-                  <td className="px-6 py-4 font-mono text-text-secondary">{item.sku}</td>
-                  <td className="px-6 py-4 font-mono text-text-secondary">{item.barcode}</td>
+                  <td className="px-6 py-4 font-mono text-xs text-text-secondary">{item.sku}</td>
+                  <td className="px-6 py-4 font-mono text-xs text-text-secondary">{item.barcode}</td>
                   <td className="px-6 py-4 text-right">
-                    <span className={`inline-flex px-2.5 py-1 rounded-full font-bold text-xs ${
-                      item.quantity === 0 ? 'bg-status-critical/10 text-status-critical' :
-                      item.quantity < 10 ? 'bg-status-warning/10 text-status-warning' :
-                      'bg-status-success/10 text-status-success'
+                    <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-black ${
+                      item.quantity === 0
+                        ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-200'
+                        : item.quantity < 50
+                          ? 'bg-amber-50 text-amber-800 dark:bg-amber-400/10 dark:text-amber-200'
+                          : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200'
                     }`}>
-                      {item.quantity} 
+                      {numberFormatter.format(item.quantity)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right text-text-tertiary text-xs">
-                     {item.box_quantity} Boxes / {item.pallet_quantity} Pallets<br/>
-                     <span className="opacity-70">({item.units_per_box} UPB)</span>
+                  <td className="px-6 py-4 text-right text-xs text-text-tertiary">
+                    {numberFormatter.format(item.box_quantity)} boxes / {numberFormatter.format(item.pallet_quantity)} pallets
+                    <br />
+                    <span className="opacity-75">{numberFormatter.format(item.units_per_box)} units per box</span>
                   </td>
                 </tr>
               ))

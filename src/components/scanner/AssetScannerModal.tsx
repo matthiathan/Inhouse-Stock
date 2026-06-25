@@ -3,6 +3,7 @@ import { QRScannerCamera } from './QRScannerCamera';
 import { ScannedMachineProfile } from './ScannedMachineProfile';
 import { useMachineLookup } from '../../hooks/useMachineLookup';
 import AssetForm from '../AssetForm';
+import { normalizeScannedAssetCode } from '../../utils/qr';
 
 interface AssetScannerModalProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export const AssetScannerModal: React.FC<AssetScannerModalProps> = ({ isOpen, on
 
 
   const handleScanSuccess = useCallback((code: string) => {
-    setScannedCode(code);
+    setScannedCode(normalizeScannedAssetCode(code));
   }, []);
 
   const handleReset = () => {

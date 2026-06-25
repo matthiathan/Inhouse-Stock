@@ -1,120 +1,126 @@
-import React, { useState } from 'react';
-import { useStock, usePerformTransaction } from '../hooks';
+import React, { useMemo, useState } from 'react';
+import { Barcode, PackagePlus } from 'lucide-react';
 import { toast } from 'sonner';
-import { PackagePlus, Barcode } from 'lucide-react';
+import { usePerformTransaction, useStock } from '../hooks';
 
 export function ReceivingView() {
   const { data: stock } = useStock();
   const performTx = usePerformTransaction();
-  
+
   const [barcode, setBarcode] = useState('');
   const [qty, setQty] = useState<number>(1);
   const [ref, setRef] = useState('');
   const [mode, setMode] = useState<'RECEIVE' | 'ADJUST'>('RECEIVE');
 
-  const handleReceive = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const matchedItem = useMemo(() => {
+    const code = barcode.trim();
+    return stock?.find(item => item.barcode === code || item.sku === code) || null;
+  }, [barcode, stock]);
+
+  const handleReceive = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!barcode.trim() || qty <= 0) return;
 
-    const item = stock?.find(s => s.barcode === barcode.trim() || s.sku === barcode.trim());
-    if (!item) {
-      toast.error('Item not found. Please register new stock via the main catalogue first.');
+    if (!matchedItem) {
+      toast.error('Item not found. Register the SKU in the inventory catalogue first.');
       return;
     }
 
     try {
       await performTx.mutateAsync({
-        stockId: item.id,
+        stockId: matchedItem.id,
         type: mode,
-        quantityChange: qty, // Positive for receive
-        referenceNumber: ref
+        quantityChange: qty,
+        referenceNumber: ref || undefined,
       });
-      toast.success(`Processed +${qty} unit(s) of ${item.item_name}`);
+      toast.success(`Processed +${qty} unit(s) of ${matchedItem.item_name}`);
       setBarcode('');
       setQty(1);
+      setRef('');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to process');
+      toast.error(err.message || 'Failed to process inbound stock.');
     }
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-full">
-      {/* Scanner & Form */}
-      <div className="p-6 md:p-8 w-full md:max-w-md border-r border-divider bg-bg-base flex-shrink-0">
-        <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
+    <div className="flex h-full flex-col md:flex-row">
+      <div className="w-full flex-shrink-0 border-r border-divider bg-bg-base p-6 md:max-w-md md:p-8">
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-xl font-black text-text-primary">
             <PackagePlus size={22} className="text-status-success" />
             Inbound Stock
-            </h2>
-            <select
-                value={mode}
-                onChange={(e) => setMode(e.target.value as any)}
-                className="bg-bg-elevated border border-divider text-xs font-bold rounded-lg px-2 py-1 outline-none text-text-secondary uppercase"
-            >
-                <option value="RECEIVE">Receive</option>
-                <option value="ADJUST">Adjust (+)</option>
-            </select>
+          </h2>
+          <select
+            value={mode}
+            onChange={event => setMode(event.target.value as 'RECEIVE' | 'ADJUST')}
+            className="rounded-md border border-divider bg-bg-elevated px-2 py-1 text-xs font-bold uppercase text-text-secondary outline-none focus:border-brand-gold"
+          >
+            <option value="RECEIVE">Receive</option>
+            <option value="ADJUST">Adjust (+)</option>
+          </select>
         </div>
 
         <form onSubmit={handleReceive} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Barcode or SKU</label>
+          <label className="block space-y-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">Barcode or SKU</span>
             <div className="relative">
               <Barcode size={18} className="absolute left-3 top-3 text-text-tertiary" />
               <input
                 type="text"
                 autoFocus
-                className="w-full bg-bg-elevated border border-divider rounded-lg pl-10 pr-4 py-2.5 text-text-primary focus:border-brand-gold focus:ring-1 focus:ring-brand-gold outline-none md:text-lg font-mono"
-                placeholder="Scan or type..."
+                className="h-11 w-full rounded-md border border-divider bg-bg-elevated pl-10 pr-4 font-mono text-sm text-text-primary outline-none transition focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 md:text-base"
+                placeholder="Scan or type code"
                 value={barcode}
-                onChange={e => setBarcode(e.target.value)}
+                onChange={event => setBarcode(event.target.value)}
               />
             </div>
-            <p className="text-xs text-text-tertiary">Keyboard wedge scanners supported.</p>
-          </div>
+          </label>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Quantity</label>
+            <label className="block space-y-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">Quantity</span>
               <input
                 type="number"
                 min="1"
-                className="w-full bg-bg-elevated border border-divider rounded-lg px-4 py-2.5 text-text-primary focus:border-brand-gold focus:ring-1 focus:ring-brand-gold outline-none"
+                className="h-11 w-full rounded-md border border-divider bg-bg-elevated px-4 text-text-primary outline-none transition focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20"
                 value={qty}
-                onChange={e => setQty(Number(e.target.value))}
+                onChange={event => setQty(Number(event.target.value))}
               />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Reference / PO</label>
+            </label>
+            <label className="block space-y-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">Reference / PO</span>
               <input
                 type="text"
-                className="w-full bg-bg-elevated border border-divider rounded-lg px-4 py-2.5 text-text-primary focus:border-brand-gold focus:ring-1 focus:ring-brand-gold outline-none"
-                placeholder="e.g. PO-9821"
+                className="h-11 w-full rounded-md border border-divider bg-bg-elevated px-4 text-text-primary outline-none transition focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20"
+                placeholder="PO-9821"
                 value={ref}
-                onChange={e => setRef(e.target.value)}
+                onChange={event => setRef(event.target.value)}
               />
-            </div>
+            </label>
           </div>
 
           <button
             type="submit"
             disabled={performTx.isPending || !barcode.trim()}
-            className="w-full bg-status-success hover:bg-status-success/90 text-white font-bold py-3 rounded-xl shadow-sm transition-colors disabled:opacity-50"
+            className="flex h-11 w-full items-center justify-center rounded-md bg-status-success px-4 text-sm font-black uppercase tracking-wider text-white shadow-subtle transition hover:bg-status-success/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {performTx.isPending ? 'Processing...' : 'CONFIRM INBOUND'}
+            {performTx.isPending ? 'Processing' : 'Confirm Inbound'}
           </button>
         </form>
       </div>
 
-      {/* Guide or Summary */}
-      <div className="flex-1 p-6 md:p-8 bg-bg-subtle flex flex-col items-center justify-center text-center">
-         <div className="max-w-sm text-text-secondary space-y-4">
-            <div className="mx-auto w-16 h-16 rounded-2xl bg-bg-base border border-divider flex items-center justify-center shadow-sm">
-                <PackagePlus size={32} className="text-text-tertiary" />
-            </div>
-            <h3 className="text-lg font-bold text-text-primary">Inbound Flow</h3>
-            <p className="text-sm">Goods receipts should be verified against external Purchase Orders before logging into the core inventory module.</p>
-         </div>
+      <div className="flex flex-1 items-center justify-center bg-bg-subtle p-6 text-center md:p-8">
+        <div className="w-full max-w-sm rounded-lg border border-divider bg-bg-base p-6">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-md border border-divider bg-bg-elevated text-text-tertiary">
+            <PackagePlus size={30} />
+          </div>
+          <h3 className="text-lg font-black text-text-primary">{matchedItem ? matchedItem.item_name : 'Awaiting SKU'}</h3>
+          <p className="mt-2 text-sm text-text-secondary">
+            {matchedItem
+              ? `${matchedItem.quantity.toLocaleString('en-ZA')} units currently available.`
+              : 'Scan or enter a registered code to stage the inbound transaction.'}
+          </p>
+        </div>
       </div>
     </div>
   );

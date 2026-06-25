@@ -1,7 +1,7 @@
 import { BaseRepository } from './baseRepository';
 import { Machine } from '../../types';
 import { supabase } from '../../lib/supabase';
-import { machineSchema, RepositoryValidationError } from '../../lib/schemas';
+import { RepositoryValidationError } from '../../lib/schemas';
 
 export class AssetRepository extends BaseRepository<Machine> {
   constructor() {
@@ -65,6 +65,24 @@ export class AssetRepository extends BaseRepository<Machine> {
       throw new RepositoryValidationError('Validation Guard: Asset ID must be a non-empty string.');
     }
 
+    if (!sectionId) {
+      throw new RepositoryValidationError('Validation Guard: Section ID is required.');
+    }
+
+    const { data: movedMachine, error: rpcError } = await supabase.rpc('change_machine_section', {
+      p_machine_id: id,
+      p_new_section_id: Number(sectionId),
+      p_reason: 'Asset section update from operations portal',
+    });
+
+    if (!rpcError) {
+      return movedMachine as Machine;
+    }
+
+    if (!/could not find|schema cache|function/i.test(rpcError.message || '')) {
+      throw rpcError;
+    }
+
     const { data, error } = await supabase
       .from(this.tableName)
       .update({ section_id: sectionId })
@@ -89,4 +107,3 @@ export class AssetRepository extends BaseRepository<Machine> {
 }
 
 export const assetRepository = new AssetRepository();
-

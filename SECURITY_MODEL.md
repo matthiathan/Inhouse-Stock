@@ -1,54 +1,47 @@
-# INHOUSE STOCK: Security Model & RLS Architecture
+# Security Model
 
-This document specifies the security controls, authentication bindings, and access structures securing Dallmayr SA's central operations portal.
+## Credential Handling
 
-## 1. Least Privilege Matrix (RBAC)
+- `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are public client configuration.
+- `SUPABASE_SERVICE_ROLE_KEY` is server-only and must be set in trusted deployment settings.
+- Any service-role key pasted into chat, tickets, logs, or screenshots is compromised and must be rotated.
+- `.env.example` contains placeholders only.
 
-The application models permissions based on explicit workforce roles. All requests must validate the user's role server-side.
+## Roles
 
-| Domain / Resource | Admin | Ops Manager | Warehouse | Driver | Technician | Finance | Standard User |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **All Assets / FAM** | READ/WRITE | READ/WRITE | READ | READ | READ | READ | READ (Lookup Only) |
-| **Stock Adjustments** | READ/WRITE | READ | READ/WRITE | NONE | NONE | NONE | NONE |
-| **Order Fulfillment** | READ/WRITE | READ/WRITE | READ/WRITE | NONE | NONE | NONE | NONE |
-| **Logistics / Routes** | READ/WRITE | READ/WRITE | NONE | OWN ROUTE | NONE | NONE | NONE |
-| **Live GPS Ingestion** | READ/WRITE | READ | NONE | INSERT OWN | NONE | NONE | NONE |
-| **Maintenance Work** | READ/WRITE | READ/WRITE | NONE | NONE | OWN JOBS | NONE | NONE |
-| **Audit Logs** | READ | NONE | NONE | NONE | NONE | NONE | NONE |
+Application roles are centralized in `src/lib/permissions.ts`:
 
-## 2. Row Level Security (RLS) Policies
+- `admin`
+- `ops_manager`
+- `warehouse`
+- `warehouse_staff`
+- `driver`
+- `tech`
+- `road_tech`
+- `finance`
+- `user`
 
-Every operational table in the PostgreSQL database has Row Level Security active. The central policies are structured as follows:
+Unknown role values normalize to `user`.
 
-### A. Geolocation Tracking Privacy (`driver_locations`)
-- **Insert Policy**: Drivers may only insert entries linking to their own authenticated user ID and referencing an active shift.
-  ```sql
-  CREATE POLICY "Drivers can insert own locations" ON public.driver_locations
-    FOR INSERT WITH CHECK (
-      auth.uid() = driver_id AND 
-      EXISTS (
-        SELECT 1 FROM public.driver_shifts 
-        WHERE id = shift_id AND driver_id = auth.uid() AND status = 'Active'
-      )
-    );
-  ```
-- **Read Policy**: Coordinates are accessible only to `ops_manager` and `admin` roles, or to the drivers themselves for history checks.
-  ```sql
-  CREATE POLICY "Authorized view of driver locations" ON public.driver_locations
-    FOR SELECT USING (
-      auth.uid() = driver_id OR 
-      auth_user_role() IN ('admin', 'ops_manager')
-    );
-  ```
+## Database Access
 
-### B. Maintenance Workflows (`maintenance_tickets` & `service_call_logs`)
-- **View Access**: Standard field service calls are filtered by the logged-in technician's geographical territory (region: JHB, KZN, CPT, NATIONAL).
-- **Modification Access**: Technicians can only alter service logs where `technician_id == auth.uid()`.
+The migration moves high-risk table access to `TO authenticated` policies with role checks. The anon role should not have direct table access to operational data.
 
-### C. Inventory Ledger Protection (`stock` & `warehouse_transactions`)
-- **Modification Access**: Only `warehouse` and `admin` roles are authorized to trigger stock updates, which must pass through the atomic `record_warehouse_transaction` transaction block.
+RPC functions use:
 
-## 3. Web Client Safeguards
-1. **Input Validation**: Zero-trust client-server data exchange. Every form field uses explicit Zod schema validation (Zod parsing matches requirements for alphanumeric, date range, and GPS accuracy).
-2. **Session Security**: Authentication token transport uses Supabase auth contexts. Role membership is evaluated inside database-level `SECURITY DEFINER` procedures (`auth_user_role()`).
-3. **No Secrets Exposed**: Never compile or bundle administrative credentials (e.g., Supabase service role keys) within public-facing client bundles.
+- `security definer` only where needed for controlled transactional behavior
+- fixed `search_path`
+- explicit role checks
+- row locking for stock and order operations
+- audit rows for sensitive mutations
+
+## Browser Guarantees
+
+The frontend must not claim reliable background GPS tracking. Driver and technician foundations should support route ownership and explicit workflow updates before any background-location promise is made.
+
+## Outstanding Production Actions
+
+- Rotate the exposed service-role key.
+- Apply the migration to staging first.
+- Re-run Supabase advisors after each database milestone.
+- Review all legacy security-definer views and functions before exposing them to users.
