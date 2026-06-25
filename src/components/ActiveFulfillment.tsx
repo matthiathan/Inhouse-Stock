@@ -109,10 +109,15 @@ export default function ActiveFulfillment({ orderId, onClose }: ActiveFulfillmen
     ));
 
     try {
+      const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${itemToUpdate.id}-${Date.now()}`;
+
       // 3. Network Call (using RPC)
-      const { error } = await supabase.rpc('fulfill_item', {
-        item_id: itemToUpdate.id,
-        qty: 1
+      const { error } = await supabase.rpc('fulfill_order_item', {
+        p_order_item_id: itemToUpdate.id,
+        p_quantity: 1,
+        p_idempotency_key: idempotencyKey
       });
 
       if (error) throw error;

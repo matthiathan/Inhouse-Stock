@@ -21,6 +21,7 @@ import { useTorch } from '../hooks/useTorch';
 import { Lightbulb, AlertTriangle, RefreshCcw, CheckCircle, QrCode, Shield, Lock, Server, Activity, CheckSquare, HardDrive, Users, Terminal, Sliders, Search, Database, Cpu, AlertOctagon, ArrowRight, Clock, Settings as SettingsIcon, ShieldCheck, Flame } from 'lucide-react';
 import { NewStockMenu } from '../components/NewStockMenu';
 import VirtualStockList from '../components/VirtualStockList';
+import { normalizeScannedAssetCode } from '../utils/qr';
 
 export { NewAssetPage } from './NewAssetPage';
 export { AnalyticsPage } from './AnalyticsPage';
@@ -269,7 +270,7 @@ export function StockPage() {
           <h1 className="text-2xl font-bold text-text-primary">Stock Inventory</h1>
           <p className="text-text-secondary">Manage and track your stock levels across departments.</p>
         </div>
-        {(role === 'admin' || role === 'warehouse_staff' || role === 'ops_manager') && (
+        {(role === 'admin' || role === 'warehouse' || role === 'ops_manager') && (
           <div className="flex gap-2 self-start sm:self-auto">
             <button 
               onClick={() => {
@@ -1179,8 +1180,10 @@ export function ScannerPage() {
             }
           }
 
+          const normalizedCode = normalizeScannedAssetCode(decodedText);
+
           // 1. Try Machine Table (QR Codes)
-          const machine = await getAssetByQR(decodedText);
+          const machine = await getAssetByQR(normalizedCode);
           if (machine) {
             toast.success("Asset found!");
             if (isMounted) {
@@ -1192,11 +1195,11 @@ export function ScannerPage() {
           }
 
           // 2. Try Stock Table (Linear Barcodes)
-          const stockItem = await getStockByBarcode(decodedText);
+          const stockItem = await getStockByBarcode(normalizedCode);
           if (stockItem) {
             toast.success("Stock item found!");
             if (isMounted) {
-              Maps('/stock?barcode=' + encodeURIComponent(decodedText));
+              Maps('/stock?barcode=' + encodeURIComponent(normalizedCode));
             }
             return;
           }
@@ -1204,7 +1207,7 @@ export function ScannerPage() {
           // 3. If neither table contains the scanned string, ask the user or route to Asset Creation
           toast.success("Unrecognized code. Initializing Quick Create flow...");
           if (isMounted) {
-            Maps('/assets/new?qr_code=' + encodeURIComponent(decodedText));
+            Maps('/assets/new?qr_code=' + encodeURIComponent(normalizedCode));
           }
         } catch (err: any) {
           toast.error(err.message || "Error processing scanned code");
@@ -2455,4 +2458,3 @@ export function LoginPage() {
     </div>
   );
 }
-

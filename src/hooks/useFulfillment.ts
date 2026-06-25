@@ -7,7 +7,14 @@ export const useFulfillment = () => {
   
   return useMutation({
     mutationFn: async (itemId: string): Promise<unknown> => {
-      const { data, error } = await supabase.rpc('fulfill_item', { item_id: itemId, qty: 1 });
+      const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${itemId}-${Date.now()}`;
+      const { data, error } = await supabase.rpc('fulfill_order_item', {
+        p_order_item_id: itemId,
+        p_quantity: 1,
+        p_idempotency_key: idempotencyKey,
+      });
       if (error) throw error;
       return data;
     },

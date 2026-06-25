@@ -13,7 +13,7 @@ const getClient = () => {
         return new Proxy({} as any, {
             get() {
                 return () => {
-                    throw new Error('Supabase environment variables are missing. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY inside Google AI Studio settings.');
+                    throw new Error('Supabase environment variables are missing. Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the deployment environment.');
                 };
             }
         });
@@ -37,4 +37,3 @@ export const supabase = new Proxy({} as any, {
     return value;
   },
 });
-

@@ -2,12 +2,14 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, isConfigured } from '../lib/supabase';
+import { AppRole } from '../types';
+import { normalizeRole, roleHasPermission } from '../lib/permissions';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  role: string | null;
+  role: AppRole | null;
   isAdmin: boolean;
   can_update_location: boolean;
   refreshProfile: () => Promise<void>;
@@ -27,14 +29,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState<string | null>(null);
+  const [role, setRole] = useState<AppRole | null>(null);
   const [canUpdateLocation, setCanUpdateLocation] = useState<boolean>(true);
 
   const fetchProfile = async (userId: string, emailStr?: string) => {
     try {
       // First, get any role defined in user metadata or app metadata as a fallback/source
       const currentUser = (await supabase.auth.getUser()).data.user;
-      const metadataRole = currentUser?.app_metadata?.role || currentUser?.user_metadata?.role;
+      const metadataRole = normalizeRole(currentUser?.app_metadata?.role || currentUser?.user_metadata?.role);
 
       const { data, error } = await supabase
         .from('users')
@@ -48,7 +50,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const defaultProfile = {
           id: userId,
           email: emailStr || '',
-          role: metadataRole || 'user',
+          role: metadataRole,
           can_update_location: true
         };
         const { data: inserted, error: insertError } = await supabase
@@ -58,14 +60,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .single();
 
         if (!insertError && inserted) {
-          setRole(inserted.role || metadataRole || 'user');
+          setRole(normalizeRole(inserted.role || metadataRole));
           setCanUpdateLocation(inserted.can_update_location !== false);
         } else {
-          setRole(metadataRole || 'user');
+          setRole(metadataRole);
           setCanUpdateLocation(true);
         }
       } else if (data) {
-        setRole(data.role || metadataRole || 'user');
+        setRole(normalizeRole(data.role || metadataRole));
         setCanUpdateLocation(data.can_update_location !== false);
       }
     } catch (err) {
@@ -77,6 +79,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!isConfigured) {
+      const storedDemoRole = localStorage.getItem('demo_user_role');
+      if (storedDemoRole) {
+        const demoRole = normalizeRole(storedDemoRole);
+        setUser({
+          id: 'demo-user',
+          email: localStorage.getItem('demo_user_email') || 'operations@dallmayr.co.za',
+          app_metadata: { role: demoRole },
+          user_metadata: { role: demoRole },
+          aud: 'authenticated',
+          created_at: new Date().toISOString()
+        } as User);
+        setRole(demoRole);
+        setCanUpdateLocation(true);
+      }
       setLoading(false);
       return;
     }
@@ -134,10 +150,22 @@ export const useAuth = () => {
   }
   
   const login = async (email: string, password: string) => {
+    if (!isConfigured) {
+      localStorage.setItem('demo_user_role', 'admin');
+      localStorage.setItem('demo_user_email', email || 'operations@dallmayr.co.za');
+      window.location.href = '/';
+      return { error: null, data: null };
+    }
     return await supabase.auth.signInWithPassword({ email, password });
   };
 
   const logout = async () => {
+    if (!isConfigured) {
+      localStorage.removeItem('demo_user_role');
+      localStorage.removeItem('demo_user_email');
+      window.location.href = '/login';
+      return { error: null };
+    }
     // Since we are resetting state, try doing it as much as possible synchronously first
     try {
       await supabase.auth.signOut();
@@ -155,11 +183,13 @@ export const useAuth = () => {
     ...context,
     isAdmin: userRole === 'admin',
     isOpsManager: userRole === 'ops_manager',
-    isWarehouse: userRole === 'warehouse',
+    isWarehouse: userRole === 'warehouse' || userRole === 'warehouse_staff',
+    isDriver: userRole === 'driver',
     isFinance: userRole === 'finance',
     isTech: userRole === 'tech' || userRole === 'road_tech',
     isUser: userRole === 'user',
     login,
-    logout
+    logout,
+    can: (permission: Parameters<typeof roleHasPermission>[1]) => roleHasPermission(userRole, permission),
   };
 };

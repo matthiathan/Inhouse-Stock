@@ -2,16 +2,73 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { uploadAssetPhoto } from '../lib/storage';
 import { DB_COLS } from '../constants/db';
+import { normalizeScannedAssetCode } from '../utils/qr';
 
 export const getAssetByQR = async (qr: string) => {
+  const normalizedQr = normalizeScannedAssetCode(qr);
+  if (!normalizedQr) return null;
+
+  try {
+    const { data: details, error: detailsError } = await supabase
+      .from('v_machine_details')
+      .select('*')
+      .eq('qr_code', normalizedQr)
+      .maybeSingle();
+
+    if (detailsError) throw detailsError;
+    if (details) {
+      return {
+        id: details.machine_id,
+        fam_id: details.fam_id,
+        section_id: details.section_id,
+        serial_number: details.serial_number || normalizedQr,
+        qr_code: details.qr_code || normalizedQr,
+        asset_name: details.asset_name || 'Unlabelled asset',
+        status: details.machine_status || 'Active',
+        created_at: details.created_at,
+        customer_name: details.customer_name,
+        customer_code: details.customer_code,
+        section_name: details.section_name,
+      };
+    }
+  } catch (err) {
+    console.warn("Machine details view is unavailable; falling back to direct asset lookup:", err);
+  }
+
   const { data, error } = await supabase
     .from('machines')
     .select('*')
-    .eq('qr_code', qr)
+    .eq('qr_code', normalizedQr)
     .maybeSingle();
     
   if (error) throw error;
-  return data;
+  if (data) return data;
+
+  const { data: famData, error: famError } = await supabase
+    .from('fam')
+    .select('*')
+    .eq(DB_COLS.QR_CODE, normalizedQr)
+    .maybeSingle();
+
+  if (famError) throw famError;
+  if (!famData) return null;
+
+  const qrColumn = DB_COLS.QR_CODE.replace(/"/g, '');
+  const serialColumn = DB_COLS.SERIAL_NO.replace(/"/g, '');
+  const assetColumn = DB_COLS.ASSET_NAME.replace(/"/g, '');
+  const sectionColumn = DB_COLS.CURRENT_LOCATION.replace(/"/g, '');
+  const createdColumn = DB_COLS.CREATED_TS.replace(/"/g, '');
+
+  return {
+    id: String(famData.id ?? normalizedQr),
+    fam_id: famData.id ? String(famData.id) : undefined,
+    serial_number: famData[serialColumn] || normalizedQr,
+    qr_code: famData[qrColumn] || normalizedQr,
+    asset_name: famData[assetColumn] || `Asset ${normalizedQr}`,
+    status: 'Active',
+    section_name: famData[sectionColumn] || null,
+    created_at: famData[createdColumn],
+  };
 };
 
 export const getSections = async () => {
@@ -31,6 +88,21 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
   let serialNumber = "";
   let machineDbId: any = null;
   let famDbId: any = null;
+  let targetSectionId: number | null = null;
+
+  try {
+    const { data: targetSection } = await supabase
+      .from('section')
+      .select('id')
+      .eq('section_name', newSectionName)
+      .maybeSingle();
+
+    if (targetSection?.id != null) {
+      targetSectionId = Number(targetSection.id);
+    }
+  } catch (err) {
+    console.warn("Resilient lookup: Failed to resolve section ID:", err);
+  }
   
   try {
     const { data: machineData } = await supabase
@@ -67,6 +139,29 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
   }
 
   try {
+    if (machineDbId && targetSectionId != null) {
+      try {
+        const { data: movedMachine, error: moveError } = await supabase.rpc('change_machine_section', {
+          p_machine_id: machineDbId,
+          p_new_section_id: targetSectionId,
+          p_reason: 'Asset section update from operations portal',
+        });
+
+        if (!moveError && movedMachine) {
+          return movedMachine;
+        }
+
+        if (moveError && !/could not find|schema cache|function/i.test(moveError.message || '')) {
+          throw moveError;
+        }
+      } catch (err: any) {
+        if (!/could not find|schema cache|function/i.test(err?.message || '')) {
+          throw err;
+        }
+        console.warn("Section-change RPC is unavailable; using legacy location update until migrations are applied:", err);
+      }
+    }
+
     try {
       let famQuery = supabase.from('fam').update({ [DB_COLS.CURRENT_LOCATION]: newSectionName });
       if (famDbId) {
@@ -89,7 +184,7 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
 
     let machinesData: any = null;
     try {
-      let machQuery = supabase.from('machines').update({ section: newSectionName });
+      let machQuery = supabase.from('machines').update({ section_id: targetSectionId });
       if (machineDbId) {
         machQuery = machQuery.eq('id', machineDbId);
       } else {
@@ -100,7 +195,7 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
       if (machErr) console.warn("Primary machines update error:", machErr.message);
 
       if (qrCode) {
-        const { data: qData } = await supabase.from('machines').update({ section: newSectionName }).eq('qr_code', qrCode).select();
+        const { data: qData } = await supabase.from('machines').update({ section_id: targetSectionId }).eq('qr_code', qrCode).select();
         if (qData && qData.length > 0) machinesData = qData;
       }
     } catch (e) {
@@ -118,7 +213,7 @@ export const updateAssetSection = async (id: string | number, newSectionName: st
         const { data: qrRecord } = await supabase.from('machines').select('*').eq('qr_code', qrCode).single();
         if (qrRecord) return qrRecord;
       }
-      return (machinesData && machinesData[0]) || { id: parsedId, section: newSectionName };
+      return (machinesData && machinesData[0]) || { id: parsedId, section_id: targetSectionId, section: newSectionName };
     }
 
     return updatedRecord;
@@ -294,31 +389,28 @@ export const deductStockQuantity = async (barcode: string, unitsToDeduct: number
   const currentStock = await getStockByBarcode(barcode);
   if (!currentStock) throw new Error("Stock item not found");
 
-  // Atomic decrement via Supabase RPC to prevent race conditions
-  try {
-    const { error } = await supabase.rpc('decrement_stock', {
-      target_item_id: Number(currentStock.id),
-      decrement_amount: unitsToDeduct
-    });
-    
-    if (!error) {
-      return { success: true };
-    }
-    console.warn("Supabase RPC 'decrement_stock' failed, using fallback:", error.message);
-  } catch (err) {
-    console.warn("Supabase RPC error, using fallback logic:", err);
+  const stockId = Number(currentStock.id);
+  if (!Number.isFinite(stockId)) {
+    throw new Error("Stock item has an invalid database ID for audited dispatch.");
   }
 
-  // Fallback: Legacy "Read-then-Write" (Vulnerable to Concurrency Overwrites)
-  const currentTotalUnits = currentStock.quantity || 0;
+  const { error } = await supabase.rpc('record_warehouse_transaction', {
+    p_stock_id: stockId,
+    p_user_id: null,
+    p_type: 'DISPATCH',
+    p_quantity_change: -Math.abs(unitsToDeduct),
+    p_reference_number: `BARCODE-${barcode}`,
+    p_notes: 'Dispatch from operations portal',
+  });
 
-  if (currentTotalUnits < unitsToDeduct) {
-    throw new Error("Insufficient stock");
+  if (error) {
+    const message = /insufficient/i.test(error.message || '')
+      ? 'Insufficient stock'
+      : error.message;
+    throw new Error(message);
   }
 
-  const remainingTotalUnits = currentTotalUnits - unitsToDeduct;
-
-  return await updateStockQuantities(barcode, remainingTotalUnits);
+  return { success: true };
 };
 
 export const updateStockQuantities = async (barcode: string, totalUnits: number) => {
@@ -372,7 +464,22 @@ export const archiveStockItem = async (stockId: number) => {
 
 export const createMaintenanceTicket = async (ticketData: any) => {
   try {
-    const { data, error } = await supabase.from('maintenance_tickets').insert([ticketData]);
+    const dbTicket = {
+      machine_id: ticketData.machine_id,
+      customer_id: ticketData.customer_id,
+      issue_description: ticketData.issue_description,
+      status: ticketData.status || 'Open',
+      priority: ticketData.priority || 'Medium',
+      tech_id: ticketData.tech_id,
+      scheduled_time: ticketData.scheduled_time,
+      contact_person: ticketData.contact_person,
+      contact_phone: ticketData.contact_phone,
+      service_notes: ticketData.service_notes,
+      resolution_notes: ticketData.resolution_notes,
+      photo_url: ticketData.photo_url,
+      resolved_at: ticketData.resolved_at || ticketData.completed_at,
+    };
+    const { data, error } = await supabase.from('maintenance_tickets').insert([dbTicket]);
     if (error) throw new Error(error.message);
     return { success: true, data };
   } catch (error: any) {

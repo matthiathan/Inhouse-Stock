@@ -1,15 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { normalizeScannedAssetCode } from '../utils/qr';
 
 export const useMachineLookup = (qrCode: string | null) => {
   return useQuery({
     queryKey: ['machine', qrCode],
     queryFn: async () => {
       if (!qrCode) return null;
+      const normalizedCode = normalizeScannedAssetCode(qrCode);
       const { data, error } = await supabase
         .from('fam')
-        .select('*, section(id, section_name)')
-        .eq('QR Code', qrCode)
+        .select('*')
+        .eq('QR Code', normalizedCode)
         .maybeSingle();
 
       if (error) {

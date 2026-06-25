@@ -41,7 +41,7 @@ export const userProfileSchema = z.object({
   id: z.string().uuid().optional().or(z.string().min(1)),
   email: z.string().email("Invalid email format"),
   full_name: z.string().min(1, "Full name is required").optional(),
-  role: z.enum(['admin', 'ops_manager', 'warehouse', 'tech', 'road_tech', 'user']),
+  role: z.enum(['admin', 'ops_manager', 'warehouse', 'warehouse_staff', 'driver', 'tech', 'road_tech', 'finance', 'user']),
   can_update_location: z.boolean().default(true),
 });
 

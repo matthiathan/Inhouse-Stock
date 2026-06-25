@@ -1,75 +1,124 @@
-import React, { useState, useEffect } from 'react';
-import { useStock, useStockTransactions, usePerformTransaction } from '../hooks';
-import { 
-  Package, 
-  ArrowDownToLine, 
-  ArrowUpFromLine, 
-  RefreshCw, 
-  AlertTriangle, 
-  History, 
+import React, { useEffect, useState } from 'react';
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  History,
+  LayoutDashboard,
+  Package,
+  RefreshCw,
   Search,
-  ScanLine
+  ShieldCheck,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
-import { InventoryView } from './InventoryView';
-import { ReceivingView } from './ReceivingView';
+import { isConfigured } from '../../../lib/supabase';
+import { useStock } from '../hooks';
+import { DashboardView } from './DashboardView';
 import { DispatchView } from './DispatchView';
 import { HistoryView } from './HistoryView';
-import { DashboardView } from './DashboardView';
+import { InventoryView } from './InventoryView';
+import { ReceivingView } from './ReceivingView';
+
+type WarehouseTab = 'DASHBOARD' | 'RECEIVING' | 'DISPATCH' | 'INVENTORY' | 'HISTORY';
+
+const tabs: Array<{ id: WarehouseTab; label: string; icon: React.ElementType }> = [
+  { id: 'DASHBOARD', label: 'Command', icon: LayoutDashboard },
+  { id: 'INVENTORY', label: 'Inventory', icon: Search },
+  { id: 'RECEIVING', label: 'Receiving', icon: ArrowDownToLine },
+  { id: 'DISPATCH', label: 'Dispatch', icon: ArrowUpFromLine },
+  { id: 'HISTORY', label: 'Ledger', icon: History },
+];
 
 export function WarehouseDashboard() {
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'RECEIVING' | 'DISPATCH' | 'INVENTORY' | 'HISTORY'>('DASHBOARD');
-  const { data: stockData, isLoading: stockLoading } = useStock();
+  const [activeTab, setActiveTab] = useState<WarehouseTab>('DASHBOARD');
+  const {
+    data: stockData,
+    isLoading: stockLoading,
+    isFetching,
+    error,
+    refetch,
+  } = useStock();
 
-  // Keyboard Navigation
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore keypresses if focused in an input
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-      
-      switch(e.key.toLowerCase()) {
-        case 'd': setActiveTab('DASHBOARD'); break;
-        case 'r': setActiveTab('RECEIVING'); break;
-        case 's': setActiveTab('DISPATCH'); break; // S for Send/Dispatch
-        case 'i': setActiveTab('INVENTORY'); break;
-        case 'h': setActiveTab('HISTORY'); break;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
+        return;
+      }
+
+      switch (event.key.toLowerCase()) {
+        case 'd':
+          setActiveTab('DASHBOARD');
+          break;
+        case 'r':
+          setActiveTab('RECEIVING');
+          break;
+        case 's':
+          setActiveTab('DISPATCH');
+          break;
+        case 'i':
+          setActiveTab('INVENTORY');
+          break;
+        case 'h':
+          setActiveTab('HISTORY');
+          break;
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   return (
-    <div className="flex h-full flex-col font-sans max-w-7xl mx-auto p-4 md:p-8 space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-text-primary tracking-tight flex items-center gap-2">
-            <Package size={28} />
+    <div className="mx-auto flex h-full max-w-7xl flex-col space-y-5 p-4 font-sans md:p-8">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-2xl font-black tracking-tight text-text-primary md:text-3xl">
+            <Package size={28} className="shrink-0 text-brand-gold" />
             Warehouse Operations
           </h1>
-          <p className="text-text-secondary mt-1 tracking-wide text-sm flex gap-4">
-            <span>Core Inventory Module</span>
-            <span className="hidden md:inline-flex items-center gap-1"><kbd className="bg-bg-base border border-divider rounded px-1 text-xs">R</kbd> Receive</span>
-            <span className="hidden md:inline-flex items-center gap-1"><kbd className="bg-bg-base border border-divider rounded px-1 text-xs">S</kbd> Dispatch</span>
-            <span className="hidden md:inline-flex items-center gap-1"><kbd className="bg-bg-base border border-divider rounded px-1 text-xs">I</kbd> Inventory</span>
+          <p className="mt-1 text-sm font-medium text-text-secondary">
+            Stock command, inbound receiving, dispatch control, and audited warehouse ledger.
           </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-xs font-bold ${
+            isConfigured
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200'
+              : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200'
+          }`}>
+            {isConfigured ? <Wifi size={15} /> : <WifiOff size={15} />}
+            {isConfigured ? 'Live Supabase' : 'Demo Workspace'}
+          </div>
+          <div className="inline-flex h-9 items-center gap-2 rounded-md border border-brand-border bg-bg-elevated px-3 text-xs font-bold text-text-secondary">
+            <ShieldCheck size={15} className="text-brand-gold" />
+            RLS Ready
+          </div>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-brand-border bg-bg-elevated px-3 text-xs font-bold text-text-primary transition hover:bg-bg-muted disabled:cursor-wait disabled:opacity-70"
+          >
+            <RefreshCw size={15} className={isFetching ? 'animate-spin' : ''} />
+            Refresh
+          </button>
         </div>
       </div>
 
-      <div className="flex overflow-x-auto border-b border-divider hide-scrollbar">
-        {[
-          { id: 'DASHBOARD', label: 'Dashboard', icon: Package },
-          { id: 'INVENTORY', label: 'Overview', icon: Search },
-          { id: 'RECEIVING', label: 'Receive Stock', icon: ArrowDownToLine },
-          { id: 'DISPATCH', label: 'Dispatch', icon: ArrowUpFromLine },
-          { id: 'HISTORY', label: 'Ledger', icon: History },
-        ].map(tab => (
+      <div className="hide-scrollbar flex overflow-x-auto border-b border-divider">
+        {tabs.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-6 py-3 font-medium text-sm border-b-2 whitespace-nowrap transition-colors ${
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex min-h-11 items-center gap-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-bold transition-colors ${
               activeTab === tab.id
                 ? 'border-brand-gold text-brand-gold'
-                : 'border-transparent text-text-tertiary hover:text-text-primary hover:border-divider'
+                : 'border-transparent text-text-tertiary hover:border-divider hover:text-text-primary'
             }`}
           >
             <tab.icon size={16} />
@@ -78,8 +127,16 @@ export function WarehouseDashboard() {
         ))}
       </div>
 
-      <div className="flex-1 bg-bg-elevated border border-divider rounded-xl shadow-sm overflow-hidden flex flex-col">
-        {activeTab === 'DASHBOARD' && <DashboardView stock={stockData} />}
+      <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-divider bg-bg-elevated shadow-subtle">
+        {activeTab === 'DASHBOARD' && (
+          <DashboardView
+            stock={stockData}
+            loading={stockLoading}
+            error={error}
+            onRetry={() => refetch()}
+            isDemo={!isConfigured}
+          />
+        )}
         {activeTab === 'INVENTORY' && <InventoryView stock={stockData} loading={stockLoading} />}
         {activeTab === 'RECEIVING' && <ReceivingView />}
         {activeTab === 'DISPATCH' && <DispatchView />}

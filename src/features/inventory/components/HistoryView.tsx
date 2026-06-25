@@ -1,93 +1,124 @@
 import React, { useState } from 'react';
-import { useStockTransactions, usePerformTransaction } from '../hooks';
-import { Loader2, ArrowRight, ArrowDownRight, ArrowUpRight, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Loader2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatDateTime } from '../../../utils/formatters';
+import { usePerformTransaction, useStockTransactions } from '../hooks';
 
 export function HistoryView() {
-  const { data: transactions, isLoading } = useStockTransactions();
+  const { data: transactions, isLoading, error, refetch } = useStockTransactions();
   const performTx = usePerformTransaction();
   const [undoing, setUndoing] = useState<string | null>(null);
 
   const handleUndo = async (tx: any) => {
     if (undoing) return;
     setUndoing(tx.id);
+
     try {
-      // Reverse the transaction. If it was a RECEIVE of 5, we DISPATCH 5.
-      // Easiest is to apply the opposite quantity logic via ADJUST
       await performTx.mutateAsync({
         stockId: tx.stock_id,
         type: 'ADJUST',
         quantityChange: -tx.quantity_change,
         referenceNumber: `UNDO-${tx.id.substring(0, 5)}`,
-        notes: `Undo of transaction ${tx.id}`
+        notes: `Undo of transaction ${tx.id}`,
       });
-      toast.success('Transaction successfully reversed!');
+      toast.success('Transaction reversed.');
     } catch (err: any) {
-      toast.error('Failed to undo transaction: ' + err.message);
+      toast.error(err.message || 'Failed to undo transaction.');
     } finally {
       setUndoing(null);
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-bg-base">
-      <div className="p-4 border-b border-divider bg-bg-subtle">
-        <h2 className="font-bold text-text-primary px-2">Global Ledger</h2>
+    <div className="flex h-full flex-col bg-bg-base">
+      <div className="flex items-center justify-between border-b border-divider bg-bg-subtle p-4">
+        <div>
+          <h2 className="px-2 font-black text-text-primary">Warehouse Ledger</h2>
+          <p className="px-2 text-xs text-text-secondary">Immutable transaction trail with controlled reversal entries.</p>
+        </div>
       </div>
-      
+
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className="bg-bg-subtle sticky top-0 z-10 border-b border-divider shadow-sm">
+        <table className="w-full min-w-[940px] whitespace-nowrap text-left text-sm">
+          <thead className="sticky top-0 z-10 border-b border-divider bg-bg-subtle shadow-sm">
             <tr>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs">Time</th>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs">Action</th>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs">Item</th>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs text-right">Delta</th>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs text-right">Balance</th>
-              <th className="px-6 py-4 font-semibold text-text-secondary uppercase tracking-wider text-xs text-center">Controls</th>
+              <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-text-secondary">Time</th>
+              <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-text-secondary">Action</th>
+              <th className="px-6 py-4 text-xs font-black uppercase tracking-widest text-text-secondary">Item</th>
+              <th className="px-6 py-4 text-right text-xs font-black uppercase tracking-widest text-text-secondary">Delta</th>
+              <th className="px-6 py-4 text-right text-xs font-black uppercase tracking-widest text-text-secondary">Balance</th>
+              <th className="px-6 py-4 text-center text-xs font-black uppercase tracking-widest text-text-secondary">Controls</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-divider">
             {isLoading ? (
-              <tr><td colSpan={6} className="p-8 text-center text-text-tertiary"><Loader2 className="animate-spin inline mr-2" size={18}/> Fetching Global Ledger...</td></tr>
+              <tr>
+                <td colSpan={6} className="p-10 text-center text-text-tertiary">
+                  <Loader2 className="mr-2 inline animate-spin" size={18} />
+                  Fetching ledger
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={6} className="p-10 text-center text-text-secondary">
+                  <AlertTriangle className="mx-auto mb-3 text-status-critical" size={30} />
+                  <p className="font-bold text-text-primary">Ledger unavailable</p>
+                  <button
+                    type="button"
+                    onClick={() => refetch()}
+                    className="mt-3 rounded-md border border-divider bg-bg-elevated px-3 py-2 text-xs font-bold text-text-primary transition hover:bg-bg-muted"
+                  >
+                    Retry
+                  </button>
+                </td>
+              </tr>
             ) : transactions?.length === 0 ? (
-              <tr><td colSpan={6} className="p-8 text-center text-text-tertiary">No transaction history.</td></tr>
+              <tr>
+                <td colSpan={6} className="p-10 text-center text-text-tertiary">No transaction history.</td>
+              </tr>
             ) : (
               transactions?.map((tx: any) => (
-                <tr key={tx.id} className="hover:bg-bg-subtle/50 transition-colors">
+                <tr key={tx.id} className="transition-colors hover:bg-bg-subtle/50">
                   <td className="px-6 py-4 font-mono text-xs text-text-secondary">
-                    {new Date(tx.created_at).toLocaleString()}
+                    {formatDateTime(tx.created_at)}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                      tx.type === 'RECEIVE' ? 'bg-status-success/10 text-status-success' :
-                      tx.type === 'DISPATCH' ? 'bg-status-warning/10 text-status-warning' :
-                      'bg-bg-subtle text-text-secondary border border-divider'
+                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wider ${
+                      tx.type === 'RECEIVE'
+                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200'
+                        : tx.type === 'DISPATCH'
+                          ? 'bg-amber-50 text-amber-800 dark:bg-amber-400/10 dark:text-amber-200'
+                          : 'border border-divider bg-bg-subtle text-text-secondary'
                     }`}>
                       {tx.type}
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <p className="font-medium text-text-primary">{tx.stock?.item_name || 'Removed Item'}</p>
-                    <p className="text-xs text-text-tertiary">{tx.reference_number || 'No Ref'}</p>
+                    <p className="font-bold text-text-primary">{tx.stock?.item_name || 'Removed Item'}</p>
+                    <p className="text-xs text-text-tertiary">{tx.reference_number || 'No reference'}</p>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <span className={`font-mono font-bold ${tx.quantity_change > 0 ? 'text-status-success' : tx.quantity_change < 0 ? 'text-status-warning' : 'text-text-secondary'}`}>
+                    <span className={`font-mono font-black ${
+                      tx.quantity_change > 0
+                        ? 'text-status-success'
+                        : tx.quantity_change < 0
+                          ? 'text-status-warning'
+                          : 'text-text-secondary'
+                    }`}>
                       {tx.quantity_change > 0 ? '+' : ''}{tx.quantity_change}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right font-mono text-text-primary">
-                    {tx.new_quantity}
-                  </td>
+                  <td className="px-6 py-4 text-right font-mono text-text-primary">{tx.new_quantity}</td>
                   <td className="px-6 py-4 text-center">
-                     <button
-                        onClick={() => handleUndo(tx)}
-                        disabled={undoing === tx.id || tx.reference_number?.startsWith('UNDO')}
-                        className="text-text-secondary hover:text-text-primary bg-bg-base border border-divider p-1.5 rounded disabled:opacity-50 transition-colors"
-                        title="Undo Transaction"
-                     >
-                        {undoing === tx.id ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
-                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUndo(tx)}
+                      disabled={undoing === tx.id || tx.reference_number?.startsWith('UNDO')}
+                      className="rounded-md border border-divider bg-bg-base p-1.5 text-text-secondary transition hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Undo transaction"
+                    >
+                      {undoing === tx.id ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+                    </button>
                   </td>
                 </tr>
               ))

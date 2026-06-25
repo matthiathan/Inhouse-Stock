@@ -238,6 +238,15 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
     const techName = tech ? (tech.full_name || tech.name || 'Technician') : 'Technician';
 
     const payload = {
+      doc_no: data.doc_no,
+      do_number: data.do_number,
+      priority: data.priority,
+      service_type: data.service_type,
+      sub_task: data.sub_task,
+      narration: data.narration,
+      current_status: data.current_status,
+      serial_number: data.serial_number,
+      qrcode: data.qrcode,
       "DocNo": data.doc_no,
       "DO#": data.do_number,
       "Priority": data.priority,
@@ -254,6 +263,7 @@ export function SCLDispatchForm({ onSuccess }: { onSuccess?: () => void }) {
       "Customer Code": customer?.code || '',
       "Assigned Employee": techName,
       "CURRENT STATUS": data.current_status,
+      assigned_date_time: new Date().toISOString(),
       "ASSIGNED DATE TIME": new Date().toISOString(),
     };
 
